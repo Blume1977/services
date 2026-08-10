@@ -36,6 +36,17 @@ jest.mock('../hooks/navigation.hook', () => ({
 import { useCompliance } from '../hooks/compliance.hook';
 import { ChargebackBlockReason, PendingChargebackEntry } from '../dto/chargeback.dto';
 
+type PendingChargebackPayload = Omit<PendingChargebackEntry, 'requestedDate' | 'date' | 'chargebackDate'> & {
+  requestedDate: string;
+  date: string;
+  chargebackDate?: string;
+};
+
+// JSON round-trip: mirrors real HTTP transport (drops undefined keys, keeps ISO strings, breaks aliasing)
+function asTransport<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 describe('useCompliance().getPendingChargebacks', () => {
   beforeEach(() => {
     // react-scripts sets resetMocks:true, which wipes implementations before each test
@@ -43,7 +54,7 @@ describe('useCompliance().getPendingChargebacks', () => {
   });
 
   it('issues GET support/pending-chargebacks and returns the payload', async () => {
-    const payload: PendingChargebackEntry[] = [
+    const payload: PendingChargebackPayload[] = [
       {
         txId: 9001,
         uid: 'T-9001',
@@ -56,11 +67,11 @@ describe('useCompliance().getPendingChargebacks', () => {
         chargebackAmount: 100,
         chargebackAsset: 'EUR',
         blockReasons: [ChargebackBlockReason.MISSING_CHARGEBACK_AMOUNT],
-        requestedDate: new Date('2026-01-15T10:00:00.000Z'),
-        date: new Date('2026-01-15T10:00:00.000Z'),
+        requestedDate: '2026-01-15T10:00:00.000Z',
+        date: '2026-01-15T10:00:00.000Z',
       },
     ];
-    mockCall.mockResolvedValue(payload);
+    mockCall.mockResolvedValue(asTransport(payload));
 
     const { result } = renderHook(() => useCompliance());
 
@@ -72,5 +83,6 @@ describe('useCompliance().getPendingChargebacks', () => {
       method: 'GET',
     });
     expect(entries).toEqual(payload);
+    expect(entries[0].requestedDate).toBe('2026-01-15T10:00:00.000Z');
   });
 });

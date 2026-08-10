@@ -42,10 +42,21 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ChargebackBlockReason, PendingChargebackEntry } from 'src/dto/chargeback.dto';
 import ComplianceChargebackListScreen from 'src/screens/compliance-chargeback-list.screen';
 
-const REQUESTED = new Date('2026-01-15T10:00:00.000Z');
-const DATE = new Date('2026-01-15T12:00:00.000Z');
+type PendingChargebackPayload = Omit<PendingChargebackEntry, 'requestedDate' | 'date' | 'chargebackDate'> & {
+  requestedDate: string;
+  date: string;
+  chargebackDate?: string;
+};
 
-function baseEntry(overrides: Partial<PendingChargebackEntry> = {}): PendingChargebackEntry {
+// JSON round-trip: mirrors real HTTP transport (drops undefined keys, keeps ISO strings, breaks aliasing)
+function asTransport<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+const REQUESTED = '2026-01-15T10:00:00.000Z';
+const DATE = '2026-01-15T12:00:00.000Z';
+
+function baseEntry(overrides: Partial<PendingChargebackPayload> = {}): PendingChargebackEntry {
   return {
     txId: 9001,
     uid: 'T-9001',
@@ -61,7 +72,7 @@ function baseEntry(overrides: Partial<PendingChargebackEntry> = {}): PendingChar
     requestedDate: REQUESTED,
     date: DATE,
     ...overrides,
-  };
+  } as unknown as PendingChargebackEntry;
 }
 
 interface Deferred<T> {
@@ -90,7 +101,7 @@ describe('ComplianceChargebackListScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsLoggedIn = true;
-    mockGetPendingChargebacks.mockResolvedValue([]);
+    mockGetPendingChargebacks.mockResolvedValue(asTransport([]));
   });
 
   it('does not fetch when not logged in', () => {
@@ -111,7 +122,7 @@ describe('ComplianceChargebackListScreen', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
 
-    deferred.resolve([]);
+    deferred.resolve(asTransport([]));
     await waitFor(() => {
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     });
@@ -132,7 +143,7 @@ describe('ComplianceChargebackListScreen', () => {
   });
 
   it('shows the empty-state row when the response is a successful empty list', async () => {
-    mockGetPendingChargebacks.mockResolvedValue([]);
+    mockGetPendingChargebacks.mockResolvedValue(asTransport([]));
 
     render(<ComplianceChargebackListScreen />);
 
@@ -194,7 +205,7 @@ describe('ComplianceChargebackListScreen', () => {
       entityId: 1005,
       blockReasons: [ChargebackBlockReason.MISSING_CREDITOR_DATA],
       userName: 'Sentinel User',
-      chargebackDate: new Date('2026-02-01T00:00:00.000Z'),
+      chargebackDate: '2026-02-01T00:00:00.000Z',
     });
 
     const multiReason = baseEntry({
@@ -217,15 +228,17 @@ describe('ComplianceChargebackListScreen', () => {
       userName: 'No Reasons User',
     });
 
-    mockGetPendingChargebacks.mockResolvedValue([
-      plainMissing,
-      nameMismatch,
-      nameMismatchMissingNames,
-      userNotReleased,
-      sentinel,
-      multiReason,
-      noBlockReasons,
-    ]);
+    mockGetPendingChargebacks.mockResolvedValue(
+      asTransport([
+        plainMissing,
+        nameMismatch,
+        nameMismatchMissingNames,
+        userNotReleased,
+        sentinel,
+        multiReason,
+        noBlockReasons,
+      ]),
+    );
 
     render(<ComplianceChargebackListScreen />);
 
@@ -324,7 +337,7 @@ describe('ComplianceChargebackListScreen', () => {
       blockReasons: [ChargebackBlockReason.MISSING_CHARGEBACK_AMOUNT],
     });
 
-    mockGetPendingChargebacks.mockResolvedValue([withAsset, withoutAsset, nullAmounts, zeroAmount]);
+    mockGetPendingChargebacks.mockResolvedValue(asTransport([withAsset, withoutAsset, nullAmounts, zeroAmount]));
 
     render(<ComplianceChargebackListScreen />);
 
@@ -368,7 +381,7 @@ describe('ComplianceChargebackListScreen', () => {
       userName: 'Empty Uid',
     });
 
-    mockGetPendingChargebacks.mockResolvedValue([withUid, emptyUid]);
+    mockGetPendingChargebacks.mockResolvedValue(asTransport([withUid, emptyUid]));
 
     render(<ComplianceChargebackListScreen />);
 
@@ -386,7 +399,7 @@ describe('ComplianceChargebackListScreen', () => {
       entityId: 1301,
       userName: 'Clickable User',
     });
-    mockGetPendingChargebacks.mockResolvedValue([entry]);
+    mockGetPendingChargebacks.mockResolvedValue(asTransport([entry]));
 
     render(<ComplianceChargebackListScreen />);
 
