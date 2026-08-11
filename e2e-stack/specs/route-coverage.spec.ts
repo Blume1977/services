@@ -16,7 +16,12 @@ import * as path from 'path';
 import * as ts from 'typescript';
 import { expect, test } from '@playwright/test';
 import type { RouteClaim } from './registry/types';
-import { readVisitedRoutes, routeMatches, visitedRoutesPath } from './fixtures/routes';
+import {
+  evaluateClaimedRouteVisits,
+  readVisitedRoutes,
+  specClaimName,
+  visitedRoutesPath,
+} from './fixtures/routes';
 
 const APP_SOURCE_PATH = '/work/app-source/App.tsx';
 
@@ -252,6 +257,28 @@ async function loadRegistryClaims(registryDir: string): Promise<{ claims: RouteC
   return { claims, byPath };
 }
 
+test('a claimed route opened only by another suite is reported as wrong-suite coverage', () => {
+  const route = '/synthetic/:id';
+  const claim: RouteClaim = { path: route, spec: 'owner.spec.ts' };
+  const specsDir = path.join(__dirname, 'synthetic-specs');
+  const canonicalClaimSpec = specClaimName(path.join(specsDir, claim.spec));
+  const differentSpec = 'different.spec.ts';
+  expect(differentSpec).not.toBe(canonicalClaimSpec);
+
+  const result = evaluateClaimedRouteVisits(
+    [route],
+    new Map([[route, claim]]),
+    [{ path: '/synthetic/42', specFile: differentSpec }],
+    specsDir,
+  );
+
+  expect(result.wrongSuite).toEqual([
+    '/synthetic/:id (claimed by owner.spec.ts, opened by: different.spec.ts)',
+  ]);
+  expect(result.neverOpened).toEqual([]);
+  expect(result.correctlyOpened).toEqual([]);
+});
+
 test('every app route is claimed by exactly one registry entry @coverage-gate', async () => {
   const registryDir = path.join(__dirname, 'registry');
   expect(fs.existsSync(APP_SOURCE_PATH), `App.tsx missing at ${APP_SOURCE_PATH}`).toBe(true);
@@ -295,27 +322,48 @@ test('every app route is claimed by exactly one registry entry @coverage-gate', 
   }
 
   // The checks above are about ownership: every route belongs to exactly one suite, and that suite
-  // exists. They say nothing about whether anything opened the route — a claim pointing at a spec
-  // that never navigates there satisfies all of them. The browser fixture records every navigation
-  // it makes, and this compares that recording against the route list, which is what turns
-  // ownership into coverage.
+  // exists. Ownership alone is a claim, not coverage — a registry entry that points at a file which
+  // never navigates there used to pass as long as some other suite happened to open the same path.
+  // The browser fixture records every navigation with the driving spec file, and on a full run this
+  // requires each claimed route to have been opened by the suite that claims it.
   //
   // Only on a full run: a filtered run (a single spec file while working on it) legitimately visits
   // a fraction of the routes, and failing there would train people to ignore this gate. run.sh and
   // both CI workflows set the flag; a partial run says so rather than checking nothing quietly.
   if (process.env.E2E_FULL_RUN === '1') {
     const visited = readVisitedRoutes();
-    const unvisited = [...real].filter((route) => !visited.some((v) => routeMatches(route, v))).sort();
     if (visited.length === 0) {
       messages.push(
         `No navigations were recorded (${visitedRoutesPath()} is empty or missing), so route coverage ` +
           `could not be checked at all on a run that declared itself complete.`,
       );
-    } else if (unvisited.length > 0) {
-      messages.push(
-        `Routes claimed but never opened (${unvisited.length}) — the claiming suite must navigate ` +
-          `there:\n  - ${unvisited.join('\n  - ')}`,
+    } else {
+      // Collisions already fail loadRegistryClaims, so path → claim is unique here.
+      const claimByPath = new Map<string, RouteClaim>();
+      for (const claim of claims) {
+        claimByPath.set(claim.path, claim);
+      }
+
+      const { neverOpened, wrongSuite } = evaluateClaimedRouteVisits(
+        real,
+        claimByPath,
+        visited,
+        __dirname,
       );
+
+      if (neverOpened.length > 0) {
+        messages.push(
+          `Routes claimed but never opened (${neverOpened.length}) — the claiming suite must navigate ` +
+            `there:\n  - ${neverOpened.join('\n  - ')}`,
+        );
+      }
+      if (wrongSuite.length > 0) {
+        messages.push(
+          `Routes opened by the wrong suite (${wrongSuite.length}) — either add a navigation in the ` +
+            `claiming suite or reassign the claim to a suite that actually opens the route:\n  - ` +
+            `${wrongSuite.join('\n  - ')}`,
+        );
+      }
     }
   } else {
     console.log(

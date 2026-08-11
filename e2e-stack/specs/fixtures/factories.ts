@@ -197,10 +197,24 @@ interface CreatedRef {
 
 const created: CreatedRef[] = [];
 
-function track(table: string, id: number | undefined | null): void {
-  if (id != null && Number.isFinite(Number(id))) {
-    created.push({ table, id: Number(id) });
+/**
+ * Require a genuine positive integer id. A 2xx response without a usable id is a broken API
+ * contract, not a missing caller precondition — fail loud so the test cannot assert on a ghost row
+ * or leave an untracked DB row behind cleanup.
+ */
+function requireId(value: unknown, factory: string, field: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Error(
+      `${factory}: expected a finite positive integer ${field}, got ${JSON.stringify(value)} ` +
+        `(typeof ${typeof value}) — a 2xx without a usable id is a broken API contract, not a ` +
+        `missing caller precondition`,
+    );
   }
+  return value;
+}
+
+function track(table: string, id: number | undefined | null): void {
+  created.push({ table, id: requireId(id, 'track', `id for table "${table}"`) });
 }
 
 /**
@@ -377,7 +391,7 @@ export interface CreateSupportIssueOptions {
 }
 
 export interface CreateSupportIssueResult {
-  supportIssueId?: number;
+  supportIssueId: number;
   uid: string;
   messageId?: number;
 }
@@ -685,8 +699,8 @@ export async function createUser(options: CreateUserOptions = {}): Promise<Creat
   }
   // Registration order is the deletion order, reversed: cleanupCreatedData() below deletes in
   // reverse registration order. user.userDataId -> user_data.id is NOT NULL with
-  // ON DELETE NO ACTION, so the dependent row (user_data) must be registered LAST here to be
-  // deleted FIRST during cleanup — before the "user" row that references it.
+  // ON DELETE NO ACTION, so user_data is registered first and its dependent user row last. The
+  // reverse cleanup order then deletes user before the user_data row it depends on.
   // Only register when this call created the account (preExisting was empty).
   if (!preExisting) {
     track('user_data', userRow.userDataId);
@@ -785,8 +799,9 @@ export async function createBankAccount(
   if (options.label) body.label = options.label;
 
   const res = await apiPost<{ id: number; iban: string }>('bankAccount', body, { jwt });
-  track('bank_data', res.id);
-  return { bankAccountId: res.id, iban: res.iban ?? iban };
+  const bankAccountId = requireId(res.id, 'createBankAccount', 'id');
+  track('bank_data', bankAccountId);
+  return { bankAccountId, iban: res.iban ?? iban };
 }
 
 // ---------------------------------------------------------------------------
@@ -812,15 +827,17 @@ export async function createBuy(jwt: string, options: CreateBuyOptions = {}): Pr
       },
       { jwt },
     );
-    track('buy', res.routeId);
-    return { buyId: res.routeId, routeId: res.routeId, assetId: asset.id };
+    const routeId = requireId(res.routeId, 'createBuy', 'routeId');
+    track('buy', routeId);
+    return { buyId: routeId, routeId, assetId: asset.id };
   }
 
   // Default: POST /buy with CreateBuyDto { asset } — creates the buy route without pricing.
   // Chosen over paymentInfos because ENVIRONMENT=loc mocks outbound HTTP and price feeds often fail.
   const res = await apiPost<{ id: number }>('buy', { asset: { id: asset.id } }, { jwt });
-  track('buy', res.id);
-  return { buyId: res.id, assetId: asset.id };
+  const buyId = requireId(res.id, 'createBuy', 'id');
+  track('buy', buyId);
+  return { buyId, assetId: asset.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -854,8 +871,9 @@ export async function createSell(jwt: string, options: CreateSellOptions = {}): 
     },
     { jwt },
   );
-  track('deposit_route', res.id);
-  return { sellId: res.id, iban: res.iban ?? iban, bankAccountId };
+  const sellId = requireId(res.id, 'createSell', 'id');
+  track('deposit_route', sellId);
+  return { sellId, iban: res.iban ?? iban, bankAccountId };
 }
 
 // ---------------------------------------------------------------------------
@@ -880,8 +898,9 @@ export async function createSwap(jwt: string, options: CreateSwapOptions = {}): 
     },
     { jwt },
   );
-  track('deposit_route', res.id);
-  return { swapId: res.id, assetId: asset.id };
+  const swapId = requireId(res.id, 'createSwap', 'id');
+  track('deposit_route', swapId);
+  return { swapId, assetId: asset.id };
 }
 
 async function userFromJwt(jwt: string): Promise<{ id: number; userDataId: number; address: string }> {
@@ -1260,14 +1279,25 @@ export async function createSupportIssue(
     { jwt },
   );
 
+  // A 2xx from POST /support/issue must produce a findable support_issue row; missing it is a
+  // broken API contract, not a shape this factory can tolerate.
   const issueRow = await queryOne<{ id: number }>(`SELECT id FROM support_issue WHERE uid = $1 LIMIT 1`, [res.uid]);
-  if (issueRow) track('support_issue', issueRow.id);
+  if (!issueRow) {
+    throw new Error(
+      `createSupportIssue: POST /support/issue answered 2xx (uid ${res.uid}) but produced no ` +
+        `findable support_issue row`,
+    );
+  }
+  track('support_issue', issueRow.id);
 
   const msgId = res.messages?.[0]?.id;
-  if (msgId) track('support_message', msgId);
+  // messages is optional on the API response type; no first message means nothing to register.
+  // `!= null` and not truthiness: a 0 or an empty string is a broken id, and it belongs in
+  // requireId's hands rather than being read as absence. Same rule as createLimitRequest below.
+  if (msgId != null) track('support_message', msgId);
 
   return {
-    supportIssueId: issueRow?.id,
+    supportIssueId: issueRow.id,
     uid: res.uid,
     messageId: msgId,
   };
@@ -1445,16 +1475,19 @@ export async function createLimitRequest(options: CreateLimitRequestOptions = {}
     if (issueRow) {
       // Parent (limit_request) first, then support_issue (child), then support_message (child of
       // issue) last — cleanupCreatedData deletes in reverse registration order (LIFO).
-      if (issueRow.limitRequestId) track('limit_request', issueRow.limitRequestId);
-      track('support_issue', issueRow.id);
-      const msgId = res.messages?.[0]?.id;
-      if (msgId != null) track('support_message', msgId);
+      // Track the id we actually return (issue row or response body), not only issueRow.limitRequestId,
+      // so a row resolved from res.limitRequest?.id is still registered for cleanup.
       const limitRequestId = issueRow.limitRequestId ?? res.limitRequest?.id;
       if (limitRequestId == null) {
         throw new Error(
           `createLimitRequest: API created support_issue ${issueRow.id} (uid ${res.uid}) without a limit_request id`,
         );
       }
+      track('limit_request', limitRequestId);
+      track('support_issue', issueRow.id);
+      const msgId = res.messages?.[0]?.id;
+      // messages is optional on the API response type; no message id means nothing to register.
+      if (msgId != null) track('support_message', msgId);
       return {
         limitRequestId,
         supportIssueId: issueRow.id,
@@ -1593,105 +1626,494 @@ export async function createCallQueueEntry(
 // 12. cleanupCreatedData
 // ---------------------------------------------------------------------------
 
-interface UserDependentTable {
-  table: string;
-  column: string;
-  referencedTable: 'user' | 'user_data';
+/**
+ * One column pair of one foreign key. A key over several columns appears as several entries.
+ *
+ * Exported, like `getForeignKeys` below, only so `factories.spec.ts` can assert that a composite
+ * key keeps its column ordinality — nothing outside this module uses either at runtime.
+ */
+export interface ForeignKeyRef {
+  table: string; // child table containing the FK column
+  column: string; // FK column on the child table
+  referencedTable: string; // parent table the FK points at
+  referencedColumn: string; // parent column the FK points at
 }
 
-let userDependentTablesPromise: Promise<UserDependentTable[]> | null = null;
+let foreignKeysPromise: Promise<ForeignKeyRef[]> | null = null;
+let tableKeyInfoPromise: Promise<TableKeyInfo> | null = null;
+
+interface TableKeyInfo {
+  /** Tables whose primary key is exactly the single column `id` — SELECT/recurse by id is safe. */
+  idAddressable: Set<string>;
+}
+
+type RowResult = { deletedSelf: boolean; failed: boolean };
 
 /**
- * Discovers every table with a foreign key pointing at "user" or user_data straight from
- * Postgres's own catalog, instead of a hand-maintained list — the API writes rows into several
- * of these (ip_log on every login; kyc_log / kyc_step / transaction_request on mail-set /
- * KYC-level / personal-data completion) that no factory tracks, so cleanupCreatedData's own
- * DELETE of "user"/"user_data" below always failed on them even with the correct user/user_data
- * delete order. Scoped deliberately to direct references to "user"/user_data only — not a
- * general recursive schema walk, which would risk reaching into chains other factories already
- * track and order correctly (transaction/buy_crypto/deposit_route etc.). Queried once per
- * process and memoized; the schema does not change mid-run.
+ * Discovers every foreign key in the public schema from Postgres's catalog, once per process.
+ * Memoized: the schema does not change mid-run, and re-querying on every cleanup would add
+ * pointless round trips. Grouping by referencedTable is done cheaply inside cleanupCreatedData
+ * from this flat list — it does not need its own cache.
+ *
+ * On rejection the memoized promise is cleared so a later call re-queries instead of replaying
+ * the same failure forever. That pairs with cleanupCreatedData loading catalogs *before*
+ * snapshotting `created`: reordering alone would still lose a second-run snapshot once retries
+ * are possible; resetting the promise alone would still lose the first snapshot if created was
+ * already cleared. Both are required.
+ *
+ * `constraint_column_usage` does not preserve per-column ordinal correspondence with
+ * `key_column_usage` for multi-column constraints. Joining them only by constraint name produces
+ * the cross product of every column on both sides, so this query uses `pg_constraint`'s
+ * `conkey`/`confkey` arrays and pairs their entries by ordinality instead.
  */
-async function getUserDependentTables(): Promise<UserDependentTable[]> {
-  if (!userDependentTablesPromise) {
-    userDependentTablesPromise = queryRows<{
+export async function getForeignKeys(): Promise<ForeignKeyRef[]> {
+  if (!foreignKeysPromise) {
+    foreignKeysPromise = queryRows<{
       table_name: string;
       column_name: string;
       referenced_table: string;
+      referenced_column: string;
     }>(
-      `SELECT tc.table_name, kcu.column_name, ccu.table_name AS referenced_table
-       FROM information_schema.table_constraints tc
-       JOIN information_schema.key_column_usage kcu
-         ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-       JOIN information_schema.constraint_column_usage ccu
-         ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema
-       WHERE tc.constraint_type = 'FOREIGN KEY'
-         AND tc.table_schema = 'public'
-         AND ccu.table_name IN ('user', 'user_data')
-         AND tc.table_name NOT IN ('user', 'user_data')`,
-    ).then((rows) =>
-      rows.map((r) => ({
-        table: r.table_name,
-        column: r.column_name,
-        referencedTable: r.referenced_table as 'user' | 'user_data',
-      })),
-    );
+      `SELECT child_table.relname AS table_name,
+              child_attribute.attname AS column_name,
+              parent_table.relname AS referenced_table,
+              parent_attribute.attname AS referenced_column
+       FROM pg_constraint con
+       JOIN pg_class child_table ON child_table.oid = con.conrelid
+       JOIN pg_namespace child_schema
+         ON child_schema.oid = child_table.relnamespace AND child_schema.nspname = 'public'
+       JOIN pg_class parent_table ON parent_table.oid = con.confrelid
+       JOIN pg_namespace parent_schema
+         ON parent_schema.oid = parent_table.relnamespace AND parent_schema.nspname = 'public'
+       JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS child_key(attnum, position) ON true
+       JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS parent_key(attnum, position)
+         ON parent_key.position = child_key.position
+       JOIN pg_attribute child_attribute
+         ON child_attribute.attrelid = con.conrelid AND child_attribute.attnum = child_key.attnum
+       JOIN pg_attribute parent_attribute
+         ON parent_attribute.attrelid = con.confrelid AND parent_attribute.attnum = parent_key.attnum
+       WHERE con.contype = 'f'`,
+    )
+      .then((rows) =>
+        rows.map((r) => ({
+          table: r.table_name,
+          column: r.column_name,
+          referencedTable: r.referenced_table,
+          referencedColumn: r.referenced_column,
+        })),
+      )
+      .catch((e) => {
+        foreignKeysPromise = null;
+        throw e;
+      });
   }
-  return userDependentTablesPromise;
+  return foreignKeysPromise;
 }
 
 /**
- * Deletes rows this module created, in reverse order, to respect FKs. For every "user" /
- * "user_data" row, first clears the API's own untracked dependent rows for exactly that row's id
- * (see getUserDependentTables) — scoped to that one id, so it can never touch another account's
- * rows or seed/master data — then deletes the row itself.
- * Best-effort: failures on individual deletes are collected and do not abort the rest.
+ * Classify every public-schema table by its actual primary key (not by column name heuristics).
+ * Memoized once per process; reject-then-reset like getForeignKeys so a failed catalog load does
+ * not poison every later cleanup in the same process.
  *
- * Every `test.afterAll` in this suite calls this function and discards the return value — a
- * failed delete would otherwise leave rows behind for whichever spec file runs next in the same
- * shared database with no trace of why. Logging here — in addition to the existing
- * `{ deleted, errors }` return value, which a caller that does check it can still use — is the
- * cheapest way to surface a failed cleanup without touching all fifteen call sites or aborting
- * the run: a leftover row must never fail the unrelated test that happens to run next.
+ * - PK is exactly `{ id }` → id-addressable (SELECT/recurse by id).
+ * - Any other primary-key shape, or no primary key at all, is not id-addressable.
+ *
+ * Leaf-ness is NOT decided here. A table that is not id-addressable cannot be bulk-deleted when
+ * another table references it, or when candidate rows are actually referenced through a self-FK,
+ * because descendants cannot be reached by id. Self-references are checked row-by-row and reported
+ * separately rather than being described as references from other tables. See
+ * deleteRowAndDescendants for that decision.
  */
-export async function cleanupCreatedData(): Promise<{ deleted: number; errors: string[] }> {
-  const errors: string[] = [];
-  let deleted = 0;
-  const snapshot = [...created].reverse();
-  created.length = 0;
-
-  // No catch: an empty dependency list would make cleanup delete nothing for user/user_data and
-  // leave rows behind for the next spec on a shared database — silently, since the caller of
-  // cleanupCreatedData does not read what it returns.
-  const dependents = await getUserDependentTables();
-
-  for (const ref of snapshot) {
-    if (ref.table === 'user' || ref.table === 'user_data') {
-      for (const dep of dependents) {
-        if (dep.referencedTable !== ref.table) continue;
-        const col = needsQuote(dep.column) ? `"${dep.column}"` : dep.column;
-        try {
-          await withDb(async (client) => {
-            await client.query(`DELETE FROM ${tableSql(dep.table)} WHERE ${col} = $1`, [ref.id]);
-          });
-        } catch (e) {
-          errors.push(`${dep.table}.${dep.column}=${ref.id}: ${e instanceof Error ? e.message : String(e)}`);
+async function getTableKeyInfo(): Promise<TableKeyInfo> {
+  if (!tableKeyInfoPromise) {
+    tableKeyInfoPromise = queryRows<{ table_name: string; column_name: string }>(
+      `SELECT tc.table_name, kcu.column_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+       WHERE tc.constraint_type = 'PRIMARY KEY'
+         AND tc.table_schema = 'public'`,
+    )
+      .then((rows) => {
+        const columnsByTable = new Map<string, string[]>();
+        for (const row of rows) {
+          const cols = columnsByTable.get(row.table_name);
+          if (cols) cols.push(row.column_name);
+          else columnsByTable.set(row.table_name, [row.column_name]);
         }
+        const idAddressable = new Set<string>();
+        for (const [tableName, columns] of columnsByTable) {
+          if (columns.length === 1 && columns[0] === 'id') {
+            idAddressable.add(tableName);
+          }
+        }
+        return { idAddressable };
+      })
+      .catch((e) => {
+        tableKeyInfoPromise = null;
+        throw e;
+      });
+  }
+  return tableKeyInfoPromise;
+}
+
+/**
+ * Check whether any row in the candidate bulk-delete batch is actually referenced through one
+ * of the table's self-referencing foreign-key column pairs. Referencers inside the same batch
+ * count too: cleanup must not assume a safe execution order for a multi-row DELETE.
+ *
+ * Composite self-referencing constraints are intentionally checked one column pair at a time.
+ * ForeignKeyRef is a flat, ordinally paired representation without constraint identity, so a
+ * fully grouped composite check is outside this helper's scope and independent probes can be
+ * conservatively false-positive for such a constraint.
+ */
+async function hasSelfReferencedRows(
+  table: string,
+  candidateColumn: string,
+  candidateValue: number,
+  selfFks: ForeignKeyRef[],
+): Promise<boolean> {
+  const candidateColumnSql = needsQuote(candidateColumn)
+    ? `"${candidateColumn}"`
+    : candidateColumn;
+
+  for (const selfFk of selfFks) {
+    const selfColumnSql = needsQuote(selfFk.column) ? `"${selfFk.column}"` : selfFk.column;
+    const selfReferencedColumnSql = needsQuote(selfFk.referencedColumn)
+      ? `"${selfFk.referencedColumn}"`
+      : selfFk.referencedColumn;
+    const probe = await queryRows<{ one: number }>(
+      `SELECT 1 AS one
+       FROM ${tableSql(table)} referenced
+       JOIN ${tableSql(table)} referencer
+         ON referencer.${selfColumnSql} = referenced.${selfReferencedColumnSql}
+       WHERE referenced.${candidateColumnSql} = $1
+       LIMIT 1`,
+      [candidateValue],
+    );
+    if (probe.length > 0) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Recursively deletes a row and every row that transitively references it via a foreign key.
+ *
+ * For (table, id): find every FK pointing at this table; for each child row with that FK equal
+ * to id, recurse first (which deletes that child and its own descendants); finally delete this
+ * row. Every DELETE is scoped to a concrete id — either the row's own id or a parent id already
+ * known to belong to a row this cleanup is responsible for — so the walk can never reach another
+ * account's rows or seed/master data, no matter how deep it goes.
+ *
+ * Three independent FK checks must stay separate (parent side vs child side):
+ * - (i) Parent side: FK points at a non-`id` column → unresolvable from the id we hold → error.
+ * - (ii) Child is not addressable by `id` AND either another table references it or rows in the
+ *   candidate bulk-delete batch are actually referenced through a self-FK → its descendants
+ *   cannot be reached, which must not pass as a silent leaf → error once per such table and no
+ *   DELETE attempt. The other-table check is schema-based; the self-reference check is row-based.
+ * - (iii) Child is not addressable by `id`, is not referenced by another table, and has no actual
+ *   self-reference involving the candidate rows → leaf for this deletion: DELETE matching rows by
+ *   FK column and stop. Both (ii) and (iii) cover tables with no primary key as well as tables with
+ *   a composite one; what separates them is whether this bulk delete could strand descendants,
+ *   not the shape of the key. The first matching branch continues before later ones run.
+ *
+ * `visitedResults` is shared across the entire cleanupCreatedData() invocation. Values are either
+ * `'in-progress'` (this row is still on an ancestor frame's stack — a genuine FK cycle) or a
+ * finished `RowResult` (the real first-visit outcome). That distinguishes:
+ * - Cycle: return `{ deletedSelf: false, failed: false }` without recursing. This branch cannot
+ *   confirm the row is gone, so it must not report `deletedSelf: true` — but it must not report a
+ *   failure either: the throw at the end is driven by `errors`, so a `failed` without a matching
+ *   entry there would re-queue the reference while cleanupCreatedData stayed silent about why. The
+ *   ancestor frame that owns this row runs its own real DELETE later: it either succeeds, or fails
+ *   against the constraint and records that failure in `errors` with a message.
+ * - Diamond (two paths reach the same row): return the cached finished result as-is, not a
+ *   fabricated success, so a failed first visit is not rewritten as success on the second path.
+ *
+ * Returns whether this row's own DELETE succeeded, and whether anything in its subtree failed
+ * (including unhandled foreign keys / non-id primary keys). A deeper failure does not skip the
+ * attempt to delete this row or its independent siblings — maximize what gets cleaned up, collect
+ * every error.
+ */
+async function deleteRowAndDescendants(
+  table: string,
+  id: number,
+  childrenByReferencedTable: Map<string, ForeignKeyRef[]>,
+  visitedResults: Map<string, 'in-progress' | RowResult>,
+  errors: string[],
+  unhandledForeignKeys: Set<string>,
+  reportedNonIdPrimaryKeyTables: Set<string>,
+  tableKeyInfo: TableKeyInfo,
+): Promise<RowResult> {
+  const visitKey = `${table}#${id}`;
+  const cached = visitedResults.get(visitKey);
+  if (cached === 'in-progress') {
+    // Genuine cycle: the row is still on an ancestor frame, which owns its real DELETE. This branch
+    // cannot claim the row is gone, but it must not claim a failure either — reporting `failed`
+    // without a matching entry in `errors` would re-queue the reference while cleanupCreatedData
+    // stays silent, because the throw is driven by `errors`. Whether the cycle really resolves is
+    // decided by the ancestor's own DELETE: it either succeeds (a cascade broke the cycle) or fails
+    // against the constraint and is recorded there, with a message.
+    return { deletedSelf: false, failed: false };
+  }
+  if (cached !== undefined) {
+    // Diamond: return the real first-visit outcome, not an unconditional success.
+    return cached;
+  }
+  visitedResults.set(visitKey, 'in-progress');
+
+  let failed = false;
+  const fks = childrenByReferencedTable.get(table) ?? [];
+
+  for (const fk of fks) {
+    if (fk.referencedColumn !== 'id') {
+      // (i) Cleanup addresses every row by id only; a FK to a non-id parent column cannot be
+      // resolved from the id we hold. Surface once per distinct child-table.column so a human
+      // reading AggregateError knows which constraint needs an explicit fix.
+      const unhandledKey = `${fk.table}.${fk.column}`;
+      if (!unhandledForeignKeys.has(unhandledKey)) {
+        unhandledForeignKeys.add(unhandledKey);
+        errors.push(
+          `unhandled foreign key ${fk.table}.${fk.column} -> ` +
+            `${fk.referencedTable}.${fk.referencedColumn}: cleanup only resolves rows by id ` +
+            `and cannot follow a reference to "${fk.referencedTable}.${fk.referencedColumn}"`,
+        );
+      }
+      failed = true;
+      continue;
+    }
+
+    const col = needsQuote(fk.column) ? `"${fk.column}"` : fk.column;
+
+    // (ii) Child cannot be addressed by id AND is referenced by another table, or candidate rows
+    // are actually referenced through one of the table's self-FKs. Only those combinations are
+    // unresolvable: the table has descendants, and they cannot be found without addressing its
+    // rows by id. A table with no primary key at all can still be referenced through a UNIQUE
+    // column, and a composite-key table with no relevant descendants (a plain join table like
+    // mros_transactions_transaction) can still be bulk-deleted safely.
+    //
+    // Reported only when a row actually exists for this parent. Keying it on the schema alone would
+    // fail every cleanup of a parent whose child table happens to be empty for it — the same
+    // mistake, one branch over, that made this whole case wrong before.
+    // Keep other-table and self-reference detection separate. The former remains schema-based;
+    // the latter must inspect candidate rows so a merely declared but unused self-FK does not
+    // block a safe bulk delete. When a self-reference is present, its error wording explains the
+    // orphaned-descendant risk rather than claiming another table is involved.
+    const referencedByOthers = (childrenByReferencedTable.get(fk.table) ?? []).some(
+      (child) => child.table !== fk.table,
+    );
+    const selfFks = (childrenByReferencedTable.get(fk.table) ?? []).filter(
+      (child) => child.table === fk.table,
+    );
+
+    if (!tableKeyInfo.idAddressable.has(fk.table) && (referencedByOthers || selfFks.length > 0)) {
+      let hasRows: boolean;
+      try {
+        const probe = await queryRows<{ one: number }>(
+          `SELECT 1 AS one FROM ${tableSql(fk.table)} WHERE ${col} = $1 LIMIT 1`,
+          [id],
+        );
+        hasRows = probe.length > 0;
+      } catch (e) {
+        errors.push(`${fk.table}.${fk.column}=${id}: ${e instanceof Error ? e.message : String(e)}`);
+        failed = true;
+        continue;
+      }
+
+      if (!hasRows) continue;
+
+      if (referencedByOthers) {
+        if (!reportedNonIdPrimaryKeyTables.has(fk.table)) {
+          reportedNonIdPrimaryKeyTables.add(fk.table);
+          errors.push(
+            `table "${fk.table}" is referenced by other tables but has no primary key of exactly ` +
+              `the single column "id": cleanup can only SELECT/recurse by id, so this table's own ` +
+              `descendants cannot be discovered and no rows were deleted for it`,
+          );
+        }
+        failed = true;
+        continue;
+      }
+
+      let selfReferenced: boolean;
+      try {
+        selfReferenced = await hasSelfReferencedRows(fk.table, fk.column, id, selfFks);
+      } catch (e) {
+        errors.push(`${fk.table}.${fk.column}=${id}: ${e instanceof Error ? e.message : String(e)}`);
+        failed = true;
+        continue;
+      }
+
+      if (selfReferenced) {
+        if (!reportedNonIdPrimaryKeyTables.has(fk.table)) {
+          reportedNonIdPrimaryKeyTables.add(fk.table);
+          errors.push(
+            `table "${fk.table}" is referenced by itself via a self-referencing foreign key but ` +
+              `has no primary key of exactly the single column "id": cleanup cannot safely bulk ` +
+              `delete its rows because self-referencing descendants could be orphaned instead of removed`,
+          );
+        }
+        failed = true;
+        continue;
       }
     }
 
+    // (iii) Child cannot be addressed by id and is not referenced by another table. It is either a
+    // schema-level leaf or its declared self-FKs do not actually involve any candidate row. The
+    // parent-side check and, when needed, the row probe above passed, so bulk-delete by FK column.
+    if (!tableKeyInfo.idAddressable.has(fk.table) && !referencedByOthers) {
+      try {
+        await withDb(async (client) => {
+          await client.query(
+            `DELETE FROM ${tableSql(fk.table)} WHERE ${col} = $1`,
+            [id],
+          );
+        });
+      } catch (e) {
+        errors.push(
+          `${fk.table}.${fk.column}=${id}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        failed = true;
+      }
+      continue;
+    }
+
+    let childRows: { id: unknown }[];
     try {
-      await withDb(async (client) => {
-        await client.query(`DELETE FROM ${tableSql(ref.table)} WHERE id = $1`, [ref.id]);
-      });
-      deleted += 1;
+      childRows = await queryRows<{ id: unknown }>(
+        `SELECT id FROM ${tableSql(fk.table)} WHERE ${col} = $1`,
+        [id],
+      );
     } catch (e) {
-      errors.push(`${ref.table}#${ref.id}: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(
+        `${fk.table}.${fk.column}=${id}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      failed = true;
+      continue;
+    }
+
+    for (const childRow of childRows) {
+      const childId = Number(childRow.id);
+      if (!Number.isFinite(childId) || childId <= 0) {
+        errors.push(
+          `${fk.table}.${fk.column}=${id}: expected a finite positive id, got ` +
+            `${JSON.stringify(childRow.id)}`,
+        );
+        failed = true;
+        continue;
+      }
+      const childResult = await deleteRowAndDescendants(
+        fk.table,
+        childId,
+        childrenByReferencedTable,
+        visitedResults,
+        errors,
+        unhandledForeignKeys,
+        reportedNonIdPrimaryKeyTables,
+        tableKeyInfo,
+      );
+      if (childResult.failed) failed = true;
     }
   }
 
+  let deletedSelf = false;
+  try {
+    await withDb(async (client) => {
+      await client.query(`DELETE FROM ${tableSql(table)} WHERE id = $1`, [id]);
+    });
+    deletedSelf = true;
+  } catch (e) {
+    errors.push(`${table}#${id}: ${e instanceof Error ? e.message : String(e)}`);
+    failed = true;
+  }
+
+  const result: RowResult = { deletedSelf, failed };
+  visitedResults.set(visitKey, result);
+  return result;
+}
+
+/**
+ * Deletes rows this module created, in reverse registration order, to respect FKs. Before
+ * deleting any tracked row, recursively deletes every row that transitively references it —
+ * discovered from the public-schema foreign-key graph (see getForeignKeys), not a hand-picked
+ * table list — so application-written children the factories never registered (e.g.
+ * support_message under support_issue under user_data, buy_crypto under bank_tx under
+ * transaction) are cleared too.
+ *
+ * Every DELETE is scoped to a concrete id (the row itself, or a foreign-key value equal to a
+ * parent id this run is already deleting). The walk therefore cannot touch another account's
+ * rows or seed/master data, no matter how deep it goes.
+ *
+ * In a shared database, a row that fails to delete is not a cosmetic problem: it is state the
+ * next spec file inherits, and it can make that unrelated file fail (or pass) for reasons that
+ * have nothing to do with what it actually tests. So a failed delete here throws instead of
+ * being swallowed — the file that caused the leftover goes red, not whichever file happens to
+ * run next. Top-level references for which anything failed (own delete, a delete underneath, or
+ * an unhandled non-id foreign key reached while processing them) are re-registered into
+ * `created`, in their original registration order, so the next call to cleanupCreatedData()
+ * retries them. A successful cleanup stays completely silent (no console.log/console.warn).
+ *
+ * Every `test.afterAll` in this suite calls this function and discards the resolved value; the
+ * throw is what actually surfaces a failed cleanup to the test runner.
+ */
+export async function cleanupCreatedData(): Promise<{ deleted: number; errors: string[] }> {
+  const errors: string[] = [];
+  const failed: CreatedRef[] = [];
+  let deleted = 0;
+
+  // Load catalogs BEFORE snapshotting/clearing `created`. If either await throws, the refs stay
+  // in `created` for a later retry. Combined with the reject-then-reset memoization in
+  // getForeignKeys/getTableKeyInfo: (a) alone still loses a second-run snapshot once (b) allows
+  // retries after a process-lifetime failure; (b) alone still loses the first snapshot if
+  // `created` was already cleared. Both are required.
+  // No catch: failing to load the FK/key catalog would leave dependents behind for the next spec
+  // on a shared database — silently, since callers of cleanupCreatedData do not read the return.
+  const foreignKeys = await getForeignKeys();
+  const tableKeyInfo = await getTableKeyInfo();
+
+  const snapshot = [...created].reverse();
+  created.length = 0;
+
+  const childrenByReferencedTable = new Map<string, ForeignKeyRef[]>();
+  for (const fk of foreignKeys) {
+    const list = childrenByReferencedTable.get(fk.referencedTable);
+    if (list) list.push(fk);
+    else childrenByReferencedTable.set(fk.referencedTable, [fk]);
+  }
+
+  // Shared across every top-level ref in this invocation — not reset per ref or per recurse.
+  const visitedResults = new Map<string, 'in-progress' | RowResult>();
+  const unhandledForeignKeys = new Set<string>();
+  const reportedNonIdPrimaryKeyTables = new Set<string>();
+
+  for (const ref of snapshot) {
+    const result = await deleteRowAndDescendants(
+      ref.table,
+      ref.id,
+      childrenByReferencedTable,
+      visitedResults,
+      errors,
+      unhandledForeignKeys,
+      reportedNonIdPrimaryKeyTables,
+      tableKeyInfo,
+    );
+    if (result.deletedSelf) deleted += 1;
+    if (result.failed) failed.push(ref);
+  }
+
+  if (failed.length > 0) {
+    // `failed` was accumulated in `snapshot` order, which is the reverse of the original
+    // registration order. Reverse it once before restoring it to `created`; the next
+    // cleanupCreatedData() call reverses `created` into the same FK-respecting retry order in
+    // which these references failed during this attempt.
+    created.push(...failed.reverse());
+  }
+
   if (errors.length > 0) {
-    console.warn(`cleanupCreatedData: ${errors.length} row(s) could not be deleted:\n  ${errors.join('\n  ')}`);
+    throw new AggregateError(
+      errors.map((message) => new Error(message)),
+      `cleanupCreatedData: ${errors.length} row(s) failed to delete and were re-queued for the next cleanup: ${errors.join('; ')}`,
+    );
   }
 
   return { deleted, errors };
@@ -1710,4 +2132,13 @@ export function resetFactoryCounter(): void {
   factoryTagStartApplied = false;
   factoryWalletStartPromise = null;
   factoryTagStartPromise = null;
+}
+
+/**
+ * Clear the memoized public-schema foreign-key catalog for tests that create or drop tables at
+ * runtime. Production callers do not need this because their schema remains stable during a run;
+ * rejection still clears the cache automatically so a later catalog load can retry.
+ */
+export function resetForeignKeysCache(): void {
+  foreignKeysPromise = null;
 }

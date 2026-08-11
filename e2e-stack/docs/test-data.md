@@ -170,7 +170,7 @@ the "level 50 but no limit granted" case instead.
 |                   |                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------- |
 | **Path**          | API `POST /v1/support/issue`                                                          |
-| **Returns**       | `{ supportIssueId?, uid, messageId? }`                                                |
+| **Returns**       | `{ supportIssueId, uid, messageId? }`                                                 |
 | **Options**       | `type` (default `GenericIssue`), `reason` (default `Other`), `name`, `message`, `tag` |
 | **Preconditions** | User must have **mail** (factory sets it if missing)                                  |
 
@@ -216,10 +216,18 @@ the "level 50 but no limit granted" case instead.
 
 ### `cleanupCreatedData()`
 
-Deletes every row tracked during this process (`{ table, id }`) in reverse creation order. Best-effort; returns `{ deleted, errors }`.
+Deletes every row tracked during this process (`{ table, id }`) in reverse creation order, descending into rows that reference them by foreign key first — including rows the application itself wrote and no test registered. Returns `{ deleted, errors }` on success and stays silent; if any delete fails, the failed references are re-registered for the next call and it throws an `AggregateError`, so the spec file that caused the leftover goes red rather than an unrelated one later against the shared database.
+
+A table that cannot be addressed by an exact single-column `id` primary key is not bulk-deleted when another table references it, or when the candidate rows are actually referenced through a self-referencing foreign key (declaring an unused self-FK in the schema is not enough). Cleanup leaves all matching rows in that table untouched and fails loudly with `table "<table>" is referenced by other tables but has no primary key of exactly the single column "id": cleanup can only SELECT/recurse by id, so this table's own descendants cannot be discovered and no rows were deleted for it` or `table "<table>" is referenced by itself via a self-referencing foreign key but has no primary key of exactly the single column "id": cleanup cannot safely bulk delete its rows because self-referencing descendants could be orphaned instead of removed`.
+
+The self-reference check is deliberately conservative for a key spanning several columns: the catalogue carries no constraint identity to group pairs by, so each column pair is probed on its own. That can refuse a delete which the full key would have allowed, never allow one it would have refused.
 
 ### Helpers
 
+- `requireId` validates every create-response id and every id passed to `track()` / `trackRow()`.
+  It throws unless the value is a positive integer, so a successful API response with a missing
+  or invalid id cannot register a nonexistent cleanup row or let a test assert against data that
+  was never written.
 - `requireUnusedDeposit(blockchain)` — throws if no free deposit.
 - `ensurePersonalDataComplete(userDataId)` — SQL fill for `isDataComplete`.
 - `e2eMail(tag?)`, `TEST_IBAN`, `resetFactoryCounter()`.

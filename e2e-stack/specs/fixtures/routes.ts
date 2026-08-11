@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
+import type { RouteClaim } from '../registry/types';
 
 /** Compare-ready pathname: one trailing slash removed, except on the root path. */
 export function normPath(p: string): string {
@@ -218,34 +219,77 @@ export function resolveAppSourcePath(): string {
 }
 
 /**
- * Where the browser fixture records the paths it navigated to, and where the coverage gate reads
- * them back. Written as one path per line so parallel appends cannot corrupt each other and a
- * crashed run still leaves everything up to that point.
+ * Where the browser fixture records the navigations it made, and where the coverage gate reads
+ * them back. Written as one line per navigation (`pathname\tspecFile`) so parallel appends cannot
+ * corrupt each other and a crashed run still leaves everything up to that point.
  */
 export function visitedRoutesPath(): string {
   return path.join(process.env.E2E_ARTIFACT_DIR ?? '/work/test-results', 'visited-routes.log');
 }
 
+export interface VisitedRoute {
+  path: string;
+  specFile: string;
+}
+
+/**
+ * Reduce an absolute spec-file path to the form registry claims use (claim.spec, e.g.
+ * "buy.spec.ts" or "subdir/buy.spec.ts"). The result is the path relative to the specs/
+ * directory — not the bare basename, which would stop matching the moment a suite moves into a
+ * subdirectory and would silently make its claims look unvisited.
+ *
+ * Both sides of the coverage gate go through this one function rather than comparing raw strings:
+ * - Recording (`recordVisitedRoute`) calls it directly with Playwright's absolute `testInfo.file`.
+ * - Evaluation (route-coverage.spec.ts) first resolves `claim.spec` to an absolute path via
+ *   `path.join(<specs dir>, claim.spec)` — the same resolution the existence check already uses —
+ *   then passes that absolute path here, so a claim written as `./buy.spec.ts` canonicalizes to
+ *   the same relative form the recording side stored.
+ */
+export function specClaimName(specFilePath: string): string {
+  return path.relative(path.join(__dirname, '..'), specFilePath);
+}
+
 /** Records one navigation. Errors are swallowed: a test must not fail over bookkeeping. */
-export function recordVisitedRoute(pathname: string): void {
+export function recordVisitedRoute(pathname: string, specFilePath: string): void {
   try {
     const file = visitedRoutesPath();
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.appendFileSync(file, `${normPath(pathname)}\n`);
+    fs.appendFileSync(file, `${normPath(pathname)}\t${specClaimName(specFilePath)}\n`);
   } catch {
     // Nothing to do here — the gate reports an empty recording as missing coverage, which is the
     // outcome that matters, and a broken artifact directory already fails the run elsewhere.
   }
 }
 
-export function readVisitedRoutes(): string[] {
+/**
+ * Reads the navigation log. Empty lines (trailing newline from appendFileSync) are skipped.
+ * A non-empty line that is not exactly `path\tspecFile` fails loud with file, line number and raw
+ * content so a malformed artifact is never silently treated as missing coverage.
+ */
+export function readVisitedRoutes(): VisitedRoute[] {
   const file = visitedRoutesPath();
   if (!fs.existsSync(file)) return [];
-  return fs
-    .readFileSync(file, 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  const result: VisitedRoute[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === '') continue;
+    const tab = line.indexOf('\t');
+    if (tab <= 0 || tab === line.length - 1) {
+      throw new Error(
+        `Malformed visited-routes entry in ${file} at line ${i + 1}: expected path\\tspecFile, got ${JSON.stringify(line)}`,
+      );
+    }
+    const pathField = line.slice(0, tab);
+    const specFile = line.slice(tab + 1);
+    if (pathField === '' || specFile === '' || specFile.includes('\t')) {
+      throw new Error(
+        `Malformed visited-routes entry in ${file} at line ${i + 1}: expected path\\tspecFile, got ${JSON.stringify(line)}`,
+      );
+    }
+    result.push({ path: pathField, specFile });
+  }
+  return result;
 }
 
 /**
@@ -265,4 +309,44 @@ export function routeMatches(route: string, visited: string): boolean {
     })
     .join('/');
   return new RegExp(`^${pattern}$`).test(normPath(visited));
+}
+
+export interface RouteVisitEvaluation {
+  neverOpened: string[];
+  wrongSuite: string[];
+  correctlyOpened: string[];
+}
+
+/** Classify claimed routes by whether, and by which spec file, each route was visited. */
+export function evaluateClaimedRouteVisits(
+  realRoutes: Iterable<string>,
+  claimByPath: Map<string, RouteClaim>,
+  visited: VisitedRoute[],
+  specsDir: string,
+): RouteVisitEvaluation {
+  const neverOpened: string[] = [];
+  const wrongSuite: string[] = [];
+  const correctlyOpened: string[] = [];
+
+  // Unclaimed routes are reported by the ownership check, so do not double-count them here.
+  for (const route of [...realRoutes].sort()) {
+    const claim = claimByPath.get(route);
+    if (!claim) continue;
+
+    const matching = visited.filter((entry) => routeMatches(route, entry.path));
+    const canonicalClaimSpec = specClaimName(path.join(specsDir, claim.spec));
+    const byClaimer = matching.filter((entry) => entry.specFile === canonicalClaimSpec);
+    if (matching.length === 0) {
+      neverOpened.push(route);
+    } else if (byClaimer.length === 0) {
+      const openers = [...new Set(matching.map((entry) => entry.specFile))].sort();
+      wrongSuite.push(
+        `${route} (claimed by ${claim.spec}, opened by: ${openers.join(', ')})`,
+      );
+    } else {
+      correctlyOpened.push(route);
+    }
+  }
+
+  return { neverOpened, wrongSuite, correctlyOpened };
 }
