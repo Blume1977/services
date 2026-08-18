@@ -65,7 +65,8 @@ import { useUserGuard } from '../hooks/guard.hook';
 import { useLayoutOptions } from '../hooks/layout-config.hook';
 import { useNavigation } from '../hooks/navigation.hook';
 import { getStoredPaymentDetailErrorMessage } from '../util/personal-iban';
-import { blankedAddress, formatSwissDateTimeWithSeconds, openPdfFromString } from '../util/utils';
+import { canOpenInvoice, revealInvoicePdf } from '../util/transaction-invoice';
+import { blankedAddress, formatSwissDateTimeWithSeconds } from '../util/utils';
 import { ZipValidation } from '../util/validation-rules';
 
 export enum ExportType {
@@ -878,13 +879,15 @@ export function TransactionList({ isSupport, setError, onSelectTransaction }: Tr
                             <StyledButton
                               label={translate('general/actions', 'Open invoice')}
                               onClick={() => {
+                                const preview = window.open('about:blank');
                                 setIsInvoiceLoading(tx.uid);
                                 setDocumentError(undefined);
                                 getTransactionInvoice(tx.uid)
                                   .then((response: PdfDocument) => {
-                                    openPdfFromString(response.pdfData);
+                                    revealInvoicePdf(response.pdfData, preview);
                                   })
                                   .catch((error: ApiError) => {
+                                    preview?.close();
                                     const storedDetailErrorText = getStoredPaymentDetailErrorMessage(error.message);
                                     setDocumentError({
                                       key: tx.uid,
@@ -897,20 +900,21 @@ export function TransactionList({ isSupport, setError, onSelectTransaction }: Tr
                               }}
                               isLoading={isInvoiceLoading === tx.uid}
                               color={StyledButtonColor.STURDY_WHITE}
-                              hidden={isSupport}
+                              hidden={isSupport || !canOpenInvoice(tx)}
                             />
                             <StyledButton
                               label={translate('general/actions', 'Open receipt')}
                               onClick={() => {
                                 if (!tx.id) return;
-
+                                const preview = window.open('about:blank');
                                 setIsReceiptLoading(tx.id);
                                 setDocumentError(undefined);
                                 getTransactionReceipt(tx.id)
                                   .then((response: PdfDocument) => {
-                                    openPdfFromString(response.pdfData);
+                                    revealInvoicePdf(response.pdfData, preview);
                                   })
                                   .catch((error: ApiError) => {
+                                    preview?.close();
                                     const storedDetailErrorText = getStoredPaymentDetailErrorMessage(error.message);
                                     setDocumentError({
                                       key: String(tx.id),
