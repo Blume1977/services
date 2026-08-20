@@ -567,9 +567,7 @@ test('assign route opens list with unassigned row and assigns to single buy targ
     .toEqual({ bankTxType: 'BuyCrypto', buyCryptoBuyId: buy.buyId });
 });
 
-test('public uid assign route opens the guest assign form and assigns to the single buy target', async ({
-  page,
-}) => {
+test('public uid assign route opens the guest assign form and assigns to the single buy target', async ({ page }) => {
   const user = await createUser({
     tag: 'tx-assign-uid',
     kycLevel: 30,
@@ -600,7 +598,17 @@ test('public uid assign route opens the guest assign form and assigns to the sin
   await page.goto(`/tx/${unassigned.uid}/${ACTION_SECRET}/assign`);
   await page.waitForLoadState('networkidle');
 
-  await expect(page.getByRole('heading', { name: 'Assign transaction', exact: true })).toBeVisible();
+  // The screen title comes from useLayoutOptions and renders in the app bar as a plain element, not
+  // as a heading, so getByRole('heading') never matches it - the other title assertions in this file
+  // use getByText for the same reason.
+  // first() is load-bearing: the submit button carries the same accessible name, so the exact text
+  // locator matches the app-bar title and that button. It is safe because exact matching resolves to
+  // the *smallest* element whose text is exactly this string - a wrapping container is never the
+  // smallest match, so ancestors stay out of the set. The app bar precedes the form, so first() is
+  // the title.
+  // 'Your Transactions' is a real in-page heading (see the list tests above), so the negative
+  // assertion below stays role-based and keeps its meaning.
+  await expect(page.getByText('Assign transaction', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your Transactions', exact: true })).not.toBeVisible();
 
   const assignBtn = page.getByRole('button', { name: 'Assign transaction' });
@@ -674,6 +682,32 @@ test("assign route for another user's unassigned tx leaves list empty of that ro
 // ---------------------------------------------------------------------------
 // /tx/:id/refund — refund form (uid)
 // ---------------------------------------------------------------------------
+
+// The refund screen opens on either an action secret or a session (transaction.screen.tsx:
+// `isRefund = ... && (hasActionSecret || isLoggedIn)`). Every other refund test below takes the
+// guest path with a secret, so without this one the logged-in half of that condition is untested
+// and /tx/:id/refund - claimed in the route registry - is never opened.
+test('logged-in refund route opens the refund form without an action secret', async ({ page }) => {
+  const user = await createUser({
+    tag: 'tx-refund-session',
+    kycLevel: 30,
+    completePersonalData: true,
+  });
+  const tx = await createTransaction({
+    state: 'pending_buy',
+    tag: 'tx-refund-session',
+    userId: user.userId,
+    userDataId: user.userDataId,
+    jwt: user.jwt,
+    amount: 189,
+    inputAsset: 'CHF',
+  });
+
+  await openScreen(page, `/tx/${tx.uid}/refund`, user.jwt);
+
+  await expect(page.getByText('Transaction refund', { exact: true })).toBeVisible();
+  await expect(page.locator('input[name="street"]')).toBeVisible();
+});
 
 test('pending buy refund form submits and writes chargeback columns', async ({ page }) => {
   const user = await createUser({
