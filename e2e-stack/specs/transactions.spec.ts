@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { expect, openScreen, queryOne, queryRows, required, test } from './fixtures';
 import {
   createUser,
@@ -7,6 +8,13 @@ import {
   cleanupCreatedData,
   TEST_IBAN,
 } from './fixtures/factories';
+
+const ACTION_SECRET = 'ab'.repeat(32);
+
+async function seedActionSecret(uid: string, secret = ACTION_SECRET): Promise<void> {
+  const actionSecretHash = createHash('sha256').update(secret).digest('hex');
+  await queryRows(`UPDATE transaction SET "actionSecretHash" = $1 WHERE uid = $2`, [actionSecretHash, uid]);
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -559,6 +567,62 @@ test('assign route opens list with unassigned row and assigns to single buy targ
     .toEqual({ bankTxType: 'BuyCrypto', buyCryptoBuyId: buy.buyId });
 });
 
+test('public uid assign route opens the guest assign form and assigns to the single buy target', async ({
+  page,
+}) => {
+  const user = await createUser({
+    tag: 'tx-assign-uid',
+    kycLevel: 30,
+    completePersonalData: true,
+  });
+  const ba = await createBankAccount(user.jwt, { iban: TEST_IBAN, label: 'Assign UID IBAN' });
+  const baRow = await queryOne<{ iban: string }>('SELECT iban FROM bank_data WHERE id = $1', [ba.bankAccountId]);
+  const buy = await createBuy(user.jwt);
+  const unassigned = await createTransaction({
+    state: 'bank_tx_only',
+    tag: 'tx-assign-uid',
+    userId: user.userId,
+    userDataId: user.userDataId,
+    amount: 445,
+  });
+  await queryRows(
+    `UPDATE bank_tx SET "senderAccount" = $1, "txAmount" = $2, "txCurrency" = 'CHF', type = 'Unknown'
+     WHERE id = $3`,
+    [required(baRow, 'created bank_data row must exist').iban, 445, unassigned.bankTxId],
+  );
+  await seedActionSecret(unassigned.uid);
+
+  // Cover /tx/:id/:secret (status with action secret) before the unauthenticated guest assign form.
+  await openScreen(page, `/tx/${unassigned.uid}/${ACTION_SECRET}`, user.jwt);
+  await expect(page.getByRole('button', { name: 'Assign transaction' })).toBeVisible();
+
+  await page.context().clearCookies();
+  await page.goto(`/tx/${unassigned.uid}/${ACTION_SECRET}/assign`);
+  await page.waitForLoadState('networkidle');
+
+  await expect(page.getByRole('heading', { name: 'Assign transaction', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your Transactions', exact: true })).not.toBeVisible();
+
+  const assignBtn = page.getByRole('button', { name: 'Assign transaction' });
+  await expect(assignBtn).toBeVisible();
+  await assignBtn.click();
+
+  await expect(page).toHaveURL(new RegExp(`/tx/${unassigned.uid}$`));
+
+  await expect
+    .poll(async () => {
+      const bankTxRow = await queryOne<{ type: string }>(`SELECT type FROM bank_tx WHERE id = $1`, [
+        unassigned.bankTxId,
+      ]);
+      const buyCryptoRow = await queryOne<{ id: number; buyId: number | null }>(
+        `SELECT id, "buyId" FROM buy_crypto WHERE "bankTxId" = $1`,
+        [unassigned.bankTxId],
+      );
+      return { bankTxType: bankTxRow?.type ?? null, buyCryptoBuyId: buyCryptoRow?.buyId ?? null };
+    })
+    .toEqual({ bankTxType: 'BuyCrypto', buyCryptoBuyId: buy.buyId });
+});
+
 test("assign route for another user's unassigned tx leaves list empty of that row and DB unchanged", async ({
   page,
 }) => {
@@ -626,8 +690,11 @@ test('pending buy refund form submits and writes chargeback columns', async ({ p
     amount: 188,
     inputAsset: 'CHF',
   });
+  await seedActionSecret(tx.uid);
 
-  await openScreen(page, `/tx/${tx.uid}/refund`, user.jwt);
+  await page.context().clearCookies();
+  await page.goto(`/tx/${tx.uid}/${ACTION_SECRET}/refund`);
+  await page.waitForLoadState('networkidle');
 
   await expect(page.getByText('Transaction refund', { exact: true })).toBeVisible();
 
@@ -647,8 +714,8 @@ test('pending buy refund form submits and writes chargeback columns', async ({ p
   await expect(submit).toBeEnabled();
   await submit.click();
 
-  await expect(page).toHaveURL(/\/tx$/);
-  expect(new URL(page.url()).pathname).toBe('/tx');
+  await expect(page).toHaveURL(new RegExp(`/tx/${tx.uid}$`));
+  expect(new URL(page.url()).pathname).toBe(`/tx/${tx.uid}`);
 
   await expect
     .poll(async () => {
@@ -686,8 +753,11 @@ test('refund form with invalid ZIP keeps submit disabled and leaves buy_crypto u
     amount: 189,
     inputAsset: 'CHF',
   });
+  await seedActionSecret(tx.uid);
 
-  await openScreen(page, `/tx/${tx.uid}/refund`, user.jwt);
+  await page.context().clearCookies();
+  await page.goto(`/tx/${tx.uid}/${ACTION_SECRET}/refund`);
+  await page.waitForLoadState('networkidle');
 
   await expect(page.getByText('Transaction refund', { exact: true })).toBeVisible();
 
@@ -734,8 +804,11 @@ test('completed buy is not refundable and shows ErrorHint with DB unchanged', as
     amount: 190,
     inputAsset: 'CHF',
   });
+  await seedActionSecret(tx.uid);
 
-  await openScreen(page, `/tx/${tx.uid}/refund`, user.jwt);
+  await page.context().clearCookies();
+  await page.goto(`/tx/${tx.uid}/${ACTION_SECRET}/refund`);
+  await page.waitForLoadState('networkidle');
 
   await expect(
     page.getByText('Something went wrong. Please try again. If the issue persists please reach out to our support.', {
