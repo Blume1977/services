@@ -1,6 +1,7 @@
 import { SpinnerSize, StyledButton, StyledButtonWidth, StyledLoadingSpinner } from '@dfx.swiss/react-components';
 import { useEffect } from 'react';
 import { ErrorHint } from 'src/components/error-hint';
+import { CopyableAddress } from 'src/components/realunit/copyable-address';
 import { useRealunitContext } from 'src/contexts/realunit.context';
 import { useSettingsContext } from 'src/contexts/settings.context';
 import { quoteIsDeactivated } from 'src/dto/realunit.dto';
@@ -53,7 +54,7 @@ export default function RealunitQuotesScreen(): JSX.Element {
                     {translate('screens/realunit', 'Amount')}
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-dfxBlue-800">
-                    {translate('screens/realunit', 'User')}
+                    {translate('screens/realunit', 'Address')}
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-dfxBlue-800">
                     {translate('screens/realunit', 'Name')}
@@ -73,9 +74,11 @@ export default function RealunitQuotesScreen(): JSX.Element {
                     <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">{displayType(quote.type)}</td>
                     <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">{quote.amount?.toLocaleString()}</td>
                     <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">
-                      {quote.userId != null ? String(quote.userId) : '-'}
+                      <CopyableAddress address={quote.userAddress} />
                     </td>
-                    <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">{quote.userName ? quote.userName : '-'}</td>
+                    <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">
+                      {quote.userName ? quote.userName : '-'}
+                    </td>
                     <td className="px-4 py-3 text-left text-sm text-dfxBlue-800">
                       {formatSwissDateTimeWithSeconds(quote.created)}
                     </td>

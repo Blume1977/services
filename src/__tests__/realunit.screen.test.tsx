@@ -6,6 +6,9 @@ const mockFetchPriceHistory = jest.fn();
 const mockFetchTokenInfo = jest.fn();
 const mockFetchQuotes = jest.fn();
 const mockFetchTransactions = jest.fn();
+const mockFetchBuyVolume = jest.fn();
+const mockFetchHolderCount = jest.fn();
+const mockFetchRegistrationStats = jest.fn();
 
 let mockContext: Record<string, unknown>;
 
@@ -38,6 +41,15 @@ jest.mock('src/components/realunit/price-history-chart', () => ({
     </button>
   ),
 }));
+jest.mock('src/components/realunit/buy-volume-chart', () => ({
+  BuyVolumeChart: () => <div data-testid="buy-volume-chart" />,
+}));
+jest.mock('src/components/realunit/holder-count-chart', () => ({
+  HolderCountChart: () => <div data-testid="holder-count-chart" />,
+}));
+jest.mock('src/components/realunit/registration-funnel', () => ({
+  RegistrationFunnel: () => <div data-testid="registration-funnel" />,
+}));
 
 jest.mock('src/hooks/guard.hook', () => ({
   useRealunitGuard: (...args: unknown[]) => mockUseRealunitGuard(...args),
@@ -68,6 +80,7 @@ jest.mock('src/util/utils', () => ({
   formatSwissDateTimeWithSeconds: (value: string) => value,
 }));
 
+import { StrictMode } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import RealunitScreen from 'src/screens/realunit.screen';
 
@@ -90,6 +103,7 @@ const QUOTE = {
   amount: 250,
   estimatedAmount: 25,
   created: '2026-01-15T10:00:00.000Z',
+  userAddress: '0x1234567890abcdef1234567890abcdef12345678',
   userId: 42,
   userName: 'Ada Lovelace',
 };
@@ -123,6 +137,21 @@ function setContext(overrides: Record<string, unknown> = {}) {
     fetchTokenInfo: mockFetchTokenInfo,
     fetchQuotes: mockFetchQuotes,
     fetchTransactions: mockFetchTransactions,
+    buyVolume: [],
+    buyVolumeLoading: false,
+    buyVolumeError: false,
+    holderCount: [],
+    holderCountLoading: false,
+    holderCountError: false,
+    registrationStats: undefined,
+    registrationLoading: false,
+    registrationError: false,
+    fetchBuyVolume: mockFetchBuyVolume,
+    fetchHolderCount: mockFetchHolderCount,
+    fetchRegistrationStats: mockFetchRegistrationStats,
+    buyVolumeTimeframe: 'All',
+    holderCountTimeframe: 'All',
+    registrationTimeframe: 'All',
     ...overrides,
   };
 }
@@ -158,6 +187,9 @@ describe('RealunitScreen', () => {
     expect(mockFetchPriceHistory).toHaveBeenCalled();
     expect(mockFetchQuotes).toHaveBeenCalled();
     expect(mockFetchTransactions).toHaveBeenCalled();
+    expect(mockFetchBuyVolume).toHaveBeenCalledWith('All');
+    expect(mockFetchHolderCount).toHaveBeenCalledWith('All');
+    expect(mockFetchRegistrationStats).toHaveBeenCalledWith('All');
     unmount();
 
     jest.clearAllMocks();
@@ -167,6 +199,98 @@ describe('RealunitScreen', () => {
     expect(mockFetchTokenInfo).not.toHaveBeenCalled();
     expect(mockFetchQuotes).not.toHaveBeenCalled();
     expect(mockFetchTransactions).not.toHaveBeenCalled();
+    expect(mockFetchBuyVolume).toHaveBeenCalledWith('All');
+    expect(mockFetchHolderCount).toHaveBeenCalledWith('All');
+    expect(mockFetchRegistrationStats).toHaveBeenCalledWith('All');
+  });
+
+  it('bootstraps lists and stats only once when StrictMode re-invokes effects', () => {
+    setContext({
+      holders: [],
+      tokenInfo: undefined,
+      priceHistory: [],
+      quotes: [],
+      transactions: [],
+    });
+    render(
+      <StrictMode>
+        <RealunitScreen />
+      </StrictMode>,
+    );
+    expect(mockFetchHolders).toHaveBeenCalledTimes(1);
+    expect(mockFetchTokenInfo).toHaveBeenCalledTimes(1);
+    expect(mockFetchPriceHistory).toHaveBeenCalledTimes(1);
+    expect(mockFetchQuotes).toHaveBeenCalledTimes(1);
+    expect(mockFetchTransactions).toHaveBeenCalledTimes(1);
+    expect(mockFetchBuyVolume).toHaveBeenCalledTimes(1);
+    expect(mockFetchHolderCount).toHaveBeenCalledTimes(1);
+    expect(mockFetchRegistrationStats).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows stats error hints and loading spinners', () => {
+    setContext({
+      buyVolumeError: true,
+      holderCountError: true,
+      registrationError: true,
+    });
+    render(<RealunitScreen />);
+    expect(screen.getByText('Failed to load buy volume.')).toBeInTheDocument();
+    expect(screen.getByText('Failed to load holder count.')).toBeInTheDocument();
+    expect(screen.getByText('Failed to load registration stats.')).toBeInTheDocument();
+  });
+
+  it('shows medium spinners while stats are loading without data', () => {
+    setContext({
+      buyVolumeLoading: true,
+      buyVolume: [],
+      holderCountLoading: true,
+      holderCount: [],
+      registrationLoading: true,
+      registrationStats: undefined,
+    });
+    render(<RealunitScreen />);
+    expect(screen.getAllByTestId('loading-spinner').some((el) => el.getAttribute('data-size') === 'md')).toBe(true);
+    expect(screen.queryByTestId('buy-volume-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('holder-count-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('registration-funnel')).not.toBeInTheDocument();
+  });
+
+  it('keeps stats charts visible while a timeframe refetch is loading', () => {
+    setContext({
+      buyVolumeLoading: true,
+      buyVolume: [{ timestamp: '2026-08-01T00:00:00.000Z', chf: 10, shares: 5, priceChf: 2 }],
+      holderCountLoading: true,
+      holderCount: [{ timestamp: '2026-08-01T00:00:00.000Z', holders: 3 }],
+      registrationLoading: true,
+      registrationStats: {
+        snapshot: {
+          completed: 1,
+          manualReview: 0,
+          confirmed: 1,
+          usersActive: 1,
+          usersNa: 0,
+          usersBlocked: 0,
+          usersDeleted: 0,
+        },
+        series: [{ timestamp: '2026-08-01T00:00:00.000Z', registered: 1, confirmed: 1 }],
+      },
+    });
+    render(<RealunitScreen />);
+    expect(screen.getByTestId('buy-volume-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('holder-count-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('registration-funnel')).toBeInTheDocument();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+  });
+
+  it('does not render the registration funnel when stats failed without a snapshot', () => {
+    setContext({
+      registrationError: true,
+      registrationStats: undefined,
+      registrationLoading: false,
+    });
+    render(<RealunitScreen />);
+    expect(screen.queryByTestId('registration-funnel')).not.toBeInTheDocument();
+    expect(screen.getByText('Failed to load registration stats.')).toBeInTheDocument();
   });
 
   it('shows token overview, totalCount fallback, price-history error, and support/compliance links', () => {
@@ -214,7 +338,7 @@ describe('RealunitScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/realunit/holders');
   });
 
-  it('shows userId and userName on pending quotes and hides deactivated ones', () => {
+  it('shows address and userName on pending quotes and hides deactivated ones', () => {
     setContext({
       quotes: [
         QUOTE,
@@ -229,16 +353,23 @@ describe('RealunitScreen', () => {
       ],
     });
     render(<RealunitScreen />);
+    expect(screen.getAllByText('Address').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('User')).not.toBeInTheDocument();
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getAllByText(QUOTE.userAddress as string).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('42')).not.toBeInTheDocument();
     expect(screen.queryByText('Cancelled Person')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByText(QUOTE.userAddress as string)[0]);
+    expect(mockCopy).toHaveBeenCalledWith(QUOTE.userAddress);
+    expect(screen.getByText('Copied')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Ada Lovelace'));
     expect(mockNavigate).toHaveBeenCalledWith('/realunit/quotes/42');
   });
 
-  it('shows dashes when pending quote userId and userName are missing', () => {
-    setContext({ quotes: [{ ...QUOTE, userId: undefined, userName: undefined, amount: undefined }] });
+  it('shows dashes when pending quote userAddress and userName are missing', () => {
+    setContext({ quotes: [{ ...QUOTE, userAddress: undefined, userName: undefined, amount: undefined }] });
     render(<RealunitScreen />);
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(2);
   });
