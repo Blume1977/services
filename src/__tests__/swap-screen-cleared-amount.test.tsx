@@ -429,6 +429,57 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
   });
 
+  it('drops a quote error after the form generation has moved on', async () => {
+    let rejectQuote: (err: unknown) => void = () => undefined;
+    mockReceiveFor.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectQuote = reject;
+        }),
+    );
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      rejectQuote({ statusCode: 500, message: 'stale' });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('stale')).not.toBeInTheDocument();
+  });
+
+  it('does not let a stale exact-price overwrite a retyped spend amount', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<SwapScreen />);
+    await flushQuote();
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.3' } });
+    });
+    await act(async () => {
+      resolveExact(quoteFor({ amount: 0.2, exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.3');
+  });
+
   it('keeps a cleared amount field empty and accepts the retyped amount', async () => {
     render(<SwapScreen />);
     await flushQuote();

@@ -155,6 +155,7 @@ export default function SellScreen(): JSX.Element {
   const spendClearedByUserRef = useRef(false);
   const targetClearedByUserRef = useRef(false);
   const isExactPriceWriteRef = useRef(false);
+  const quoteGeneration = useRef(0);
 
   const availableBalance = selectedAsset && findBalance(selectedAsset);
 
@@ -274,11 +275,16 @@ export default function SellScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedAsset;
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
+    if (requiresUpdate && !exactPriceWrite) {
+      quoteGeneration.current += 1;
+    }
+
     if (requiresUpdate) {
       if (hasSpendData && !targetClearedByUserRef.current) {
         updateData(Side.GET);
       } else if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
         setValidatedData(undefined);
+        setPaymentInfo(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
@@ -307,11 +313,16 @@ export default function SellScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedAsset;
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
+    if (requiresUpdate && !exactPriceWrite) {
+      quoteGeneration.current += 1;
+    }
+
     if (requiresUpdate) {
       if (hasGetData && !spendClearedByUserRef.current) {
         updateData(Side.SPEND);
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         setValidatedData(undefined);
+        setPaymentInfo(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }
@@ -339,49 +350,44 @@ export default function SellScreen(): JSX.Element {
 
     if (!validatedData) return;
 
+    const generation = quoteGeneration.current;
     const data: SellPaymentInfo = { ...validatedData, externalTransactionId };
 
     setIsLoading(validatedData.sideToUpdate);
     receiveFor(data)
       .then((sell) => {
-        if (!isRunning || !sell) return;
+        if (!isRunning || !sell || generation !== quoteGeneration.current) return;
         validateSell(sell);
         setPaymentInfo(sell);
         return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
-        if (isRunning && info) {
-          const skipWrite =
-            validatedData.sideToUpdate === Side.SPEND
-              ? spendClearedByUserRef.current
-              : targetClearedByUserRef.current;
-          if (!skipWrite) {
-            isExactPriceWriteRef.current = true;
-            if (validatedData.sideToUpdate === Side.SPEND) {
-              setVal('amount', info.amount.toString());
-            } else {
-              setVal('targetAmount', info.estimatedAmount.toString());
-            }
-            setPaymentInfo(info);
-          }
+        if (!isRunning || !info || generation !== quoteGeneration.current) return;
+        isExactPriceWriteRef.current = true;
+        if (validatedData.sideToUpdate === Side.SPEND) {
+          setVal('amount', info.amount.toString());
+        } else {
+          setVal('targetAmount', info.estimatedAmount.toString());
         }
+        setPaymentInfo(info);
       })
       .catch((error: ApiError) => {
-        if (isRunning) {
-          if (error.statusCode === 400 && error.message === 'Ident data incomplete') {
-            navigate('/profile');
+        if (!isRunning || generation !== quoteGeneration.current) return;
+        if (error.statusCode === 400 && error.message === 'Ident data incomplete') {
+          navigate('/profile');
+        } else {
+          setPaymentInfo(undefined);
+          const kycErrorFromMessage = getKycErrorFromMessage(error.message);
+          if (kycErrorFromMessage) {
+            setKycError(kycErrorFromMessage);
           } else {
-            setPaymentInfo(undefined);
-            const kycErrorFromMessage = getKycErrorFromMessage(error.message);
-            if (kycErrorFromMessage) {
-              setKycError(kycErrorFromMessage);
-            } else {
-              setErrorMessage(error.message ?? 'Unknown error');
-            }
+            setErrorMessage(error.message ?? 'Unknown error');
           }
         }
       })
-      .finally(() => isRunning && setIsLoading(undefined));
+      .finally(() => {
+        if (isRunning && generation === quoteGeneration.current) setIsLoading(undefined);
+      });
 
     return () => {
       isRunning = false;
