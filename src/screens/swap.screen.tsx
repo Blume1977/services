@@ -383,7 +383,12 @@ export default function SwapScreen(): JSX.Element {
 
     if (requiresUpdate) {
       if (hasGetData && !spendClearedByUserRef.current) {
-        updateData(Side.SPEND);
+        const addressOnlyChange =
+          Boolean(enteredAmount) &&
+          selectedAddress?.address !== validatedData?.receiverAddress &&
+          selectedTargetAmount === paymentInfo?.estimatedAmount?.toString() &&
+          selectedTargetAsset?.uniqueName === paymentInfo?.targetAsset?.uniqueName;
+        updateData(addressOnlyChange ? Side.GET : Side.SPEND);
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         setValidatedData(undefined);
         setPaymentInfo(undefined);

@@ -368,7 +368,7 @@ export default function BuyScreen(): JSX.Element {
       getCurrency(availableCurrencies, prefCurrency?.name) ??
       getDefaultCurrency(availableCurrencies);
     if (prefCurrency && currency) setVal('currency', currency);
-  }, [assetIn, getCurrency, prefCurrency, currencies, selectedPaymentMethod]);
+  }, [assetIn, getCurrency, prefCurrency, currencies]);
 
   useEffect(() => {
     const selectedMethod =
@@ -465,6 +465,7 @@ export default function BuyScreen(): JSX.Element {
       } else if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
         // the user is retyping — never refill the emptied field from the opposite side
         setValidatedData(undefined);
+        setIsLoading(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
@@ -495,6 +496,7 @@ export default function BuyScreen(): JSX.Element {
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         // the user is retyping — never refill the emptied field from the opposite side
         setValidatedData(undefined);
+        setIsLoading(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }
@@ -582,7 +584,9 @@ export default function BuyScreen(): JSX.Element {
     setPaymentInfoState(undefined);
     setIsConfirming(false);
     setContinueWithoutPersonalIban(undefined);
-    if (!hasCompleteSpendSide && !hasCompleteGetSide) {
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+      setIsLoading(undefined);
+    } else if (!hasCompleteSpendSide && !hasCompleteGetSide) {
       setValidatedData(undefined);
       setIsLoading(undefined);
     } else {

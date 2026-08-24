@@ -329,7 +329,12 @@ export default function SellScreen(): JSX.Element {
 
     if (requiresUpdate) {
       if (hasGetData && !spendClearedByUserRef.current) {
-        updateData(Side.SPEND);
+        const ibanOnlyChange =
+          Boolean(enteredAmount) &&
+          selectedBankAccount?.iban !== validatedData?.iban &&
+          selectedTargetAmount === paymentInfo?.estimatedAmount?.toString() &&
+          selectedCurrency?.name === paymentInfo?.currency?.name;
+        updateData(ibanOnlyChange ? Side.GET : Side.SPEND);
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         setValidatedData(undefined);
         setPaymentInfo(undefined);

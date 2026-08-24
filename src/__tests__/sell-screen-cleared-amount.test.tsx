@@ -38,6 +38,7 @@ const usdtPrivate = {
   description: 'Tether',
 };
 const bankAccount = { id: 1, iban: 'CH9300762011623852957', preferredCurrency: { name: 'CHF', sellable: true } };
+const bankAccountAlt = { id: 2, iban: 'DE89370400440532013000', preferredCurrency: { name: 'CHF', sellable: true } };
 let mockAssets = [eth];
 let mockSession: { address: string } | undefined;
 let mockActiveWallet: string | undefined;
@@ -242,6 +243,9 @@ jest.mock('src/components/order/bank-account-selector', () => ({
         <button type="button" data-testid="bank-account-toggle" onClick={() => onModalToggle(true)}>
           toggle
         </button>
+        <button type="button" data-testid="bank-account-alt" onClick={() => onChange(bankAccountAlt)}>
+          alt
+        </button>
       </div>
     );
   },
@@ -405,6 +409,18 @@ describe('SellScreen', () => {
     cleanup();
     jest.clearAllTimers();
     jest.useRealTimers();
+  });
+
+  it('keeps the typed spend amount when only the bank account changes', async () => {
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    await act(async () => {
+      screen.getByTestId('bank-account-alt').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
   });
 
   it('does not treat a no-op exact-price spend write as a user edit', async () => {

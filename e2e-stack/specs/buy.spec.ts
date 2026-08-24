@@ -567,7 +567,7 @@ test.describe('Buy flow', () => {
     await expect(spendAmountInput(page)).toHaveValue(amountIn);
   }
 
-  test('/buy: default spend amount is 300 and payment information quotes it', async ({ page }) => {
+  test('/buy: default spend amount stays 300 after quote settlement', async ({ page }) => {
     test.setTimeout(90000);
     await openQuoteCapableBuy(page, 'buy-default-300');
 
