@@ -594,4 +594,79 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
+
+  it('does not restore amountIn after the user clears spend and then changes asset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: '100' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('100'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+
+    await act(async () => {
+      screen.getByTestId('select-asset-ETH').click();
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
+  it('quotes the typed spend amount after both fields were cleared', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+
+    const callsBeforeType = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(screen.getByTestId('input-amount')).toHaveValue('150');
+    const typed = mockReceiveFor.mock.calls.slice(callsBeforeType);
+    expect(typed.length).toBeGreaterThan(0);
+    expect(typed.every((call: any) => String(call[0].amount) === '150')).toBe(true);
+  });
+
+  it('quotes from a new spend amount after the target field was cleared', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+
+    const callsBeforeType = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(screen.getByTestId('input-amount')).toHaveValue('150');
+    const typed = mockReceiveFor.mock.calls.slice(callsBeforeType);
+    expect(typed.length).toBeGreaterThan(0);
+    expect(typed.every((call: any) => String(call[0].amount) === '150')).toBe(true);
+  });
 });

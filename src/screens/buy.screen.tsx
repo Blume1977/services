@@ -400,9 +400,9 @@ export default function BuyScreen(): JSX.Element {
   }, [availablePaymentMethods, paymentMethod]);
 
   useEffect(() => {
-    if (amountIn) {
+    if (amountIn && !spendClearedByUserRef.current) {
       setVal('amount', amountIn);
-    } else if (amountOut) {
+    } else if (amountOut && !targetClearedByUserRef.current) {
       setVal('targetAmount', amountOut);
     } else if (
       selectedAsset &&
@@ -461,6 +461,11 @@ export default function BuyScreen(): JSX.Element {
   useEffect(() => {
     if (selectedAmount) {
       spendClearedByUserRef.current = false;
+      // A newly typed spend amount starts a spend-side quote. Exact-price echo must not
+      // look like typing: it sets pendingFormSynchronization before writing the field.
+      if (selectedAmount !== previousAmountRef.current && pendingFormSynchronization.current == null) {
+        targetClearedByUserRef.current = false;
+      }
     } else if (previousAmountRef.current) {
       spendClearedByUserRef.current = true;
     }
@@ -490,6 +495,9 @@ export default function BuyScreen(): JSX.Element {
   useEffect(() => {
     if (selectedTargetAmount) {
       targetClearedByUserRef.current = false;
+      if (selectedTargetAmount !== previousTargetAmountRef.current && pendingFormSynchronization.current == null) {
+        spendClearedByUserRef.current = false;
+      }
     } else if (previousTargetAmountRef.current) {
       targetClearedByUserRef.current = true;
     }
