@@ -602,6 +602,24 @@ test.describe('Buy flow', () => {
       .toEqual({ value: '', paymentVisible: false });
   });
 
+  test('/buy: switching currency after clearing spend does not refill the field', async ({ page }) => {
+    test.setTimeout(90000);
+    await openChfEthAmountIn(page, 'buy-clear-fx', '100');
+    expect(await waitForQuoteUi(page, 45000)).toBe('payment');
+
+    await clearNumberInput(spendAmountInput(page));
+    await expect.poll(async () => spendAmountInput(page).inputValue(), { timeout: 8000 }).toBe('');
+
+    await chooseFromSectionDropdown(page, spendSection(page), 'EUR');
+
+    await expect
+      .poll(async () => spendAmountInput(page).inputValue(), {
+        timeout: 8000,
+        message: 'cleared spend amount must stay empty after a currency change',
+      })
+      .toBe('');
+  });
+
   test('/buy: retyping a custom spend amount quotes exactly that amount', async ({ page }) => {
     test.setTimeout(90000);
     const capture = attachPaymentInfoCapture(page);

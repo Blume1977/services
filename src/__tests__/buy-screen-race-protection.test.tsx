@@ -13,6 +13,7 @@ const mockEmptyPersonalIbans: never[] = [];
 
 const mockAssets = [
   { name: 'BTC', uniqueName: 'Bitcoin', category: 'Public', blockchain: 'Ethereum', description: 'Bitcoin' },
+  { name: 'ETH', uniqueName: 'Ethereum/ETH', category: 'Public', blockchain: 'Ethereum', description: 'Ethereum' },
 ];
 const mockAssetsMap = new Map([['Ethereum', mockAssets]]);
 const mockGetAssets = () => mockAssets;
@@ -156,7 +157,26 @@ jest.mock('@dfx.swiss/react-components', () => {
       ) : null,
     StyledLink: ({ children, label }: any) => <div>{label ?? children}</div>,
     StyledLoadingSpinner: () => null,
-    StyledSearchDropdown: () => null,
+    StyledSearchDropdown: ({ name, items, labelFunc, control }: any) => (
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }: any) => (
+          <div data-testid={`dropdown-${name}`}>
+            {(items ?? []).map((item: any) => (
+              <button
+                key={labelFunc(item)}
+                type="button"
+                data-testid={`select-${name}-${labelFunc(item)}`}
+                onClick={() => field.onChange(item)}
+              >
+                {labelFunc(item)}
+              </button>
+            ))}
+          </div>
+        )}
+      />
+    ),
     StyledVerticalStack: ({ children }: any) => <div>{children}</div>,
   };
 });
@@ -528,5 +548,50 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('100'));
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
     expect(mockReceiveFor.mock.calls.every((call: any) => String(call[0].amount) === '100')).toBe(true);
+  });
+
+  it('does not refill a cleared spend field when the currency changes', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+
+    const callsBeforeCurrency = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      screen.getByTestId('select-currency-EUR').click();
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    const after = mockReceiveFor.mock.calls.slice(callsBeforeCurrency);
+    expect(after.every((call: any) => call[0].amount === undefined)).toBe(true);
+  });
+
+  it('does not refill a cleared spend field when the asset changes', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+
+    await act(async () => {
+      screen.getByTestId('select-asset-ETH').click();
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
 });

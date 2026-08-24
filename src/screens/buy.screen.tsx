@@ -302,12 +302,14 @@ export default function BuyScreen(): JSX.Element {
   const activePaymentInfoIdRef = useRef<number>();
   activePaymentInfoIdRef.current = paymentInfo?.id;
   const isMountedRef = useRef(true);
-  // A non-empty → empty transition of an amount field is an edit in progress: the cross-side
-  // fallbacks below must not recompute into a field the user just emptied to retype — the
-  // exact-price echo would overwrite their input mid-typing. A field that was never set (deep
-  // links, first render) still resolves over the fallbacks.
+  // A field the user emptied stays an edit in progress until they type again. The one-frame
+  // non-empty → empty edge is not enough: a later currency/asset effect would otherwise take
+  // the cross-side fallback and the exact-price echo would write back into the empty field.
+  // Never-set fields (deep links, first render) still resolve over the fallbacks.
   const previousAmountRef = useRef<string>();
   const previousTargetAmountRef = useRef<string>();
+  const spendClearedByUserRef = useRef(false);
+  const targetClearedByUserRef = useRef(false);
 
   const effectivePersonalIban = activeSuppressPersonalIban ? undefined : personalIban;
   const personalIbanSelector = activeSuppressPersonalIban
@@ -402,8 +404,15 @@ export default function BuyScreen(): JSX.Element {
       setVal('amount', amountIn);
     } else if (amountOut) {
       setVal('targetAmount', amountOut);
-    } else if (selectedAsset && !selectedAmount && !selectedTargetAmount) {
-      // Always set amount (input field) - backend calculates targetAmount
+    } else if (
+      selectedAsset &&
+      !selectedAmount &&
+      !selectedTargetAmount &&
+      !spendClearedByUserRef.current &&
+      !targetClearedByUserRef.current
+    ) {
+      // Always set amount (input field) - backend calculates targetAmount.
+      // Do not restore the default into a field the user just emptied.
       setVal('amount', '300');
     }
   }, [amountIn, amountOut, selectedAsset]);
@@ -450,7 +459,11 @@ export default function BuyScreen(): JSX.Element {
 
   // SPEND data changed
   useEffect(() => {
-    const amountCleared = !selectedAmount && !!previousAmountRef.current;
+    if (selectedAmount) {
+      spendClearedByUserRef.current = false;
+    } else if (previousAmountRef.current) {
+      spendClearedByUserRef.current = true;
+    }
     previousAmountRef.current = selectedAmount;
 
     const requiresUpdate =
@@ -462,10 +475,10 @@ export default function BuyScreen(): JSX.Element {
     const hasGetData = selectedTargetAmount && selectedAsset;
 
     if (requiresUpdate) {
-      if (hasSpendData) {
+      if (hasSpendData && !targetClearedByUserRef.current) {
         updateData(Side.GET);
-      } else if (amountCleared) {
-        // the user is retyping the amount — never refill the field from the target side
+      } else if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+        // the user is retyping — never refill the emptied field from the opposite side
         setValidatedData(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
@@ -475,7 +488,11 @@ export default function BuyScreen(): JSX.Element {
 
   // GET data changed
   useEffect(() => {
-    const targetAmountCleared = !selectedTargetAmount && !!previousTargetAmountRef.current;
+    if (selectedTargetAmount) {
+      targetClearedByUserRef.current = false;
+    } else if (previousTargetAmountRef.current) {
+      targetClearedByUserRef.current = true;
+    }
     previousTargetAmountRef.current = selectedTargetAmount;
 
     const isSameTargetAmount = selectedTargetAmount === paymentInfo?.estimatedAmount?.toString();
@@ -485,10 +502,10 @@ export default function BuyScreen(): JSX.Element {
     const hasGetData = selectedTargetAmount && selectedAsset;
 
     if (requiresUpdate) {
-      if (hasGetData) {
+      if (hasGetData && !spendClearedByUserRef.current) {
         updateData(Side.SPEND);
-      } else if (targetAmountCleared) {
-        // the user is retyping the target amount — never refill the field from the spend side
+      } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
+        // the user is retyping — never refill the emptied field from the opposite side
         setValidatedData(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
@@ -762,9 +779,11 @@ export default function BuyScreen(): JSX.Element {
           personalIbanProvider: data.personalIbanProvider,
           customerIdentity: loadingCustomerIdentity,
         });
-        debouncedValidatedData.sideToUpdate === Side.SPEND
-          ? setVal('amount', info.amount.toString())
-          : setVal('targetAmount', info.estimatedAmount.toString());
+        if (debouncedValidatedData.sideToUpdate === Side.SPEND) {
+          if (!spendClearedByUserRef.current) setVal('amount', info.amount.toString());
+        } else if (!targetClearedByUserRef.current) {
+          setVal('targetAmount', info.estimatedAmount.toString());
+        }
         setPaymentInfoState({
           info,
           paymentMethod: data.paymentMethod,
