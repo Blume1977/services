@@ -33,7 +33,7 @@ import {
   StyledSearchDropdown,
   StyledVerticalStack,
 } from '@dfx.swiss/react-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FieldPath, FieldPathValue, useForm, useWatch } from 'react-hook-form';
 import { PaymentInformationContent } from 'src/components/payment/payment-info-sell';
 import { PrivateAssetHint } from 'src/components/private-asset-hint';
@@ -295,8 +295,18 @@ export default function SwapScreen(): JSX.Element {
     }
   }, [enteredAmount]);
 
+  // A non-empty → empty transition of an amount field is an edit in progress: the cross-side
+  // fallbacks below must not recompute into a field the user just emptied to retype — the
+  // exact-price echo would overwrite their input mid-typing. A field that was never set (deep
+  // links, first render) still resolves over the fallbacks.
+  const previousAmountRef = useRef<string>();
+  const previousTargetAmountRef = useRef<string>();
+
   // SPEND data changed
   useEffect(() => {
+    const amountCleared = !enteredAmount && !!previousAmountRef.current;
+    previousAmountRef.current = enteredAmount;
+
     const requiresUpdate =
       enteredAmount !== paymentInfo?.amount?.toString() ||
       selectedSourceAsset?.uniqueName !== paymentInfo?.sourceAsset.uniqueName;
@@ -307,6 +317,9 @@ export default function SwapScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasSpendData) {
         updateData(Side.GET);
+      } else if (amountCleared) {
+        // the user is retyping the amount — never refill the field from the target side
+        setValidatedData(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
@@ -315,6 +328,9 @@ export default function SwapScreen(): JSX.Element {
 
   // GET data changed
   useEffect(() => {
+    const targetAmountCleared = !selectedTargetAmount && !!previousTargetAmountRef.current;
+    previousTargetAmountRef.current = selectedTargetAmount;
+
     const isSameTargetAmount = selectedTargetAmount === paymentInfo?.estimatedAmount?.toString();
     const requiresUpdate =
       !isSameTargetAmount || selectedTargetAsset?.uniqueName !== paymentInfo?.targetAsset?.uniqueName;
@@ -325,6 +341,9 @@ export default function SwapScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasGetData) {
         updateData(Side.SPEND);
+      } else if (targetAmountCleared) {
+        // the user is retyping the target amount — never refill the field from the spend side
+        setValidatedData(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }

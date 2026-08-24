@@ -34,7 +34,7 @@ import {
   StyledSearchDropdown,
   StyledVerticalStack,
 } from '@dfx.swiss/react-components';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FieldPath, FieldPathValue, useForm, useWatch } from 'react-hook-form';
 import { BankAccountSelector } from 'src/components/order/bank-account-selector';
 import { AddressSwitch } from 'src/components/payment/address-switch';
@@ -243,8 +243,18 @@ export default function SellScreen(): JSX.Element {
     }
   }, [enteredAmount]);
 
+  // A non-empty → empty transition of an amount field is an edit in progress: the cross-side
+  // fallbacks below must not recompute into a field the user just emptied to retype — the
+  // exact-price echo would overwrite their input mid-typing. A field that was never set (deep
+  // links, first render) still resolves over the fallbacks.
+  const previousAmountRef = useRef<string>();
+  const previousTargetAmountRef = useRef<string>();
+
   // SPEND data changed
   useEffect(() => {
+    const amountCleared = !enteredAmount && !!previousAmountRef.current;
+    previousAmountRef.current = enteredAmount;
+
     const requiresUpdate =
       enteredAmount !== paymentInfo?.amount?.toString() || selectedAsset?.uniqueName !== paymentInfo?.asset.uniqueName;
 
@@ -254,16 +264,20 @@ export default function SellScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasSpendData) {
         updateData(Side.GET);
+      } else if (amountCleared) {
+        // the user is retyping the amount — never refill the field from the target side
+        setValidatedData(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
     }
-
-    // requiresUpdate && updateData(Side.GET);
   }, [enteredAmount, selectedAsset]);
 
   // GET data changed
   useEffect(() => {
+    const targetAmountCleared = !selectedTargetAmount && !!previousTargetAmountRef.current;
+    previousTargetAmountRef.current = selectedTargetAmount;
+
     const requiresUpdate =
       selectedTargetAmount !== paymentInfo?.estimatedAmount?.toString() ||
       selectedCurrency?.name !== paymentInfo?.currency?.name ||
@@ -275,12 +289,13 @@ export default function SellScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasGetData) {
         updateData(Side.SPEND);
+      } else if (targetAmountCleared) {
+        // the user is retyping the target amount — never refill the field from the spend side
+        setValidatedData(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }
     }
-
-    // requiresUpdate && updateData(isSameTargetAmount && enteredAmount ? Side.GET : Side.SPEND);
   }, [selectedTargetAmount, selectedCurrency, selectedBankAccount]);
 
   function updateData(sideToUpdate: Side) {
