@@ -322,6 +322,10 @@ export default function BuyScreen(): JSX.Element {
   const selectedPaymentMethod = useWatch({ control, name: 'paymentMethod' });
   const selectedAddress = useWatch({ control, name: 'address' });
 
+  // Same-turn clear+resolveExact: the amount effect has not run yet, so latch here.
+  if (!selectedAmount && previousAmountRef.current) spendClearedByUserRef.current = true;
+  if (!selectedTargetAmount && previousTargetAmountRef.current) targetClearedByUserRef.current = true;
+
   function setVal(field: FieldPath<FormData>, value: FieldPathValue<FormData, FieldPath<FormData>>) {
     setValue(field, value, { shouldValidate: true });
   }
@@ -749,13 +753,10 @@ export default function BuyScreen(): JSX.Element {
         return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
-        if (
-          !isRunning ||
-          generation !== quoteGeneration.current ||
-          customerIdentityRef.current !== loadingCustomerIdentity ||
-          !info
-        )
-          return;
+        if (!isRunning || !info) return;
+        if (debouncedValidatedData.sideToUpdate === Side.SPEND && spendClearedByUserRef.current) return;
+        if (debouncedValidatedData.sideToUpdate === Side.GET && targetClearedByUserRef.current) return;
+        if (generation !== quoteGeneration.current || customerIdentityRef.current !== loadingCustomerIdentity) return;
         const synchronizedAmount =
           debouncedValidatedData.sideToUpdate === Side.SPEND
             ? info.amount.toString()

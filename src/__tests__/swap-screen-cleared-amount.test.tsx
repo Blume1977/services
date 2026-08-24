@@ -458,6 +458,32 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
   });
 
+  it('does not write a resolving exact-price into target when clear and resolve share a turn', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<SwapScreen />);
+    await flushQuote();
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+      resolveExact(quoteFor({ amount: 0.2, exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+  });
+
   it('drops a quote error after the form generation has moved on', async () => {
     let rejectQuote: (err: unknown) => void = () => undefined;
     mockReceiveFor.mockImplementation(

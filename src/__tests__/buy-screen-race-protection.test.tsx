@@ -567,11 +567,44 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
     });
-    await settle(() => expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice && hangExact)).toBe(true));
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice && hangExact)).toBe(true),
+    );
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
     await act(async () => {
+      resolveExact(quoteFor({ targetAmount: '0.01', exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
+  it('does not write a resolving exact-price into spend when clear and resolve share a turn', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice && hangExact)).toBe(true),
+    );
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
       resolveExact(quoteFor({ targetAmount: '0.01', exactPrice: true }));
       await Promise.resolve();
     });
@@ -598,7 +631,9 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
     });
-    await settle(() => expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice)).toBe(true));
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice)).toBe(true),
+    );
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
     });
@@ -608,6 +643,102 @@ describe('BuyScreen cleared amount protection', () => {
     });
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
+  it('does not write a resolving exact-price into target when clear and resolve share a turn', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice)).toBe(true),
+    );
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+      resolveExact(quoteFor({ amount: 150, exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
+  it('does not let a stale exact-price overwrite a retyped spend amount', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice && hangExact)).toBe(true),
+    );
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await act(async () => {
+      resolveExact(quoteFor({ targetAmount: '0.01', exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('150');
+  });
+
+  it('does not write a resolving exact-price into a retyped spend amount in the same turn', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await settle(() =>
+      expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice && hangExact)).toBe(true),
+    );
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+      resolveExact(quoteFor({ targetAmount: '0.01', exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('150');
   });
 
   it('still invalidates quotes when spend is cleared after an exact-price no-op write', async () => {
