@@ -738,6 +738,24 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
   });
 
+  it('does not restore a default amount after the user clears spend and the asset changes', async () => {
+    mockAssets = [eth, btc];
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'ETH' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    await act(async () => {
+      screen.getByTestId('select-asset-BTC').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
   it('skips the exact-price request when the first quote is empty', async () => {
     mockReceiveFor.mockResolvedValueOnce(undefined);
     render(<SellScreen />);

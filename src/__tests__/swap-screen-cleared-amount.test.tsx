@@ -695,7 +695,7 @@ describe('SwapScreen', () => {
       screen.getByTestId('select-sourceAsset-BTC').click();
     });
     await flushQuote();
-    expect(screen.getByTestId('select-sourceAsset-BTC')).toBeInTheDocument();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
   });
 
   it('skips the exact-price request when the first quote is empty', async () => {

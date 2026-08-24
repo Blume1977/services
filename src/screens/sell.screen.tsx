@@ -150,6 +150,11 @@ export default function SellScreen(): JSX.Element {
   const selectedTargetAmount = useWatch({ control, name: 'targetAmount' });
   const selectedAddress = useWatch({ control, name: 'address' });
 
+  const previousAmountRef = useRef<string>();
+  const previousTargetAmountRef = useRef<string>();
+  const spendClearedByUserRef = useRef(false);
+  const targetClearedByUserRef = useRef(false);
+
   const availableBalance = selectedAsset && findBalance(selectedAsset);
 
   useEffect(() => {
@@ -203,11 +208,15 @@ export default function SellScreen(): JSX.Element {
 
   useEffect(() => {
     if (amountIn) {
-      setVal('amount', amountIn);
+      if (!spendClearedByUserRef.current) setVal('amount', amountIn);
     } else if (amountOut) {
-      setVal('targetAmount', amountOut);
-    } else if (selectedAsset && !enteredAmount) {
-      // Asset-specific default amounts
+      if (!targetClearedByUserRef.current) setVal('targetAmount', amountOut);
+    } else if (
+      selectedAsset &&
+      !enteredAmount &&
+      !spendClearedByUserRef.current &&
+      !targetClearedByUserRef.current
+    ) {
       const defaultAmount =
         selectedAsset.name === 'BTC' ? '0.001' : selectedAsset.name === 'ETH' ? '0.1' : '300';
       setVal('amount', defaultAmount);
@@ -243,16 +252,15 @@ export default function SellScreen(): JSX.Element {
     }
   }, [enteredAmount]);
 
-  // A non-empty → empty transition of an amount field is an edit in progress: the cross-side
-  // fallbacks below must not recompute into a field the user just emptied to retype — the
-  // exact-price echo would overwrite their input mid-typing. A field that was never set (deep
-  // links, first render) still resolves over the fallbacks.
-  const previousAmountRef = useRef<string>();
-  const previousTargetAmountRef = useRef<string>();
-
+  // A field the user emptied stays an edit in progress until they type again.
   // SPEND data changed
   useEffect(() => {
-    const amountCleared = !enteredAmount && !!previousAmountRef.current;
+    if (enteredAmount) {
+      spendClearedByUserRef.current = false;
+      if (!previousAmountRef.current) targetClearedByUserRef.current = false;
+    } else if (previousAmountRef.current) {
+      spendClearedByUserRef.current = true;
+    }
     previousAmountRef.current = enteredAmount;
 
     const requiresUpdate =
@@ -262,10 +270,9 @@ export default function SellScreen(): JSX.Element {
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
     if (requiresUpdate) {
-      if (hasSpendData) {
+      if (hasSpendData && !targetClearedByUserRef.current) {
         updateData(Side.GET);
-      } else if (amountCleared) {
-        // the user is retyping the amount — never refill the field from the target side
+      } else if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
         setValidatedData(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
@@ -275,7 +282,12 @@ export default function SellScreen(): JSX.Element {
 
   // GET data changed
   useEffect(() => {
-    const targetAmountCleared = !selectedTargetAmount && !!previousTargetAmountRef.current;
+    if (selectedTargetAmount) {
+      targetClearedByUserRef.current = false;
+      if (!previousTargetAmountRef.current) spendClearedByUserRef.current = false;
+    } else if (previousTargetAmountRef.current) {
+      targetClearedByUserRef.current = true;
+    }
     previousTargetAmountRef.current = selectedTargetAmount;
 
     const requiresUpdate =
@@ -289,11 +301,10 @@ export default function SellScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasGetData) {
         updateData(Side.SPEND);
-      } else if (targetAmountCleared) {
-        // the user is retyping the target amount — never refill the field from the spend side
-        setValidatedData(undefined);
-      } else if (hasSpendData) {
+      } else if (hasSpendData && !targetClearedByUserRef.current) {
         updateData(Side.GET);
+      } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
+        setValidatedData(undefined);
       }
     }
   }, [selectedTargetAmount, selectedCurrency, selectedBankAccount]);
@@ -336,9 +347,11 @@ export default function SellScreen(): JSX.Element {
       })
       .then((info) => {
         if (isRunning && info) {
-          validatedData.sideToUpdate === Side.SPEND
-            ? setVal('amount', info.amount.toString())
-            : setVal('targetAmount', info.estimatedAmount.toString());
+          if (validatedData.sideToUpdate === Side.SPEND) {
+            if (!spendClearedByUserRef.current) setVal('amount', info.amount.toString());
+          } else if (!targetClearedByUserRef.current) {
+            setVal('targetAmount', info.estimatedAmount.toString());
+          }
           setPaymentInfo(info);
         }
       })
