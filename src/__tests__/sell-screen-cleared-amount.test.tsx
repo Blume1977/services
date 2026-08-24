@@ -937,14 +937,117 @@ describe('SellScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/connect', { setRedirect: true });
   });
 
-  it('submits the empty onSubmit handler', async () => {
+  it('completes a manual transfer from form submit', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
     render(<SellScreen />);
     await flushQuote();
     await act(async () => {
       screen.getByTestId('form-submit').click();
+      await Promise.resolve();
     });
-    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
-    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sell-completion')).toBeInTheDocument();
+  });
+
+  it('does not complete from form submit after spend is cleared', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SellScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
+  it('does not complete from form submit after target is cleared', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SellScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit on a private asset', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate];
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit when KYC blocks payment', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('quote-error')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit when amount is too low', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({ ...quoteFor(req), error: 'AmountTooLow', minVolume: 1 }),
+    );
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount-error')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit when a quote error is showing', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockReceiveFor.mockRejectedValue({ statusCode: 500, message: 'boom' });
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not start a second send while form submit is already processing', async () => {
+    mockCanSendTransaction.mockReturnValue(true);
+    mockActiveWallet = 'mm';
+    mockSendTransaction.mockImplementation(() => new Promise(() => undefined));
+    render(<SellScreen />);
+    await flushQuote();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockSendTransaction).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockSendTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('toggles the bank-account modal title', async () => {

@@ -555,7 +555,10 @@ export default function SellScreen(): JSX.Element {
   }
 
   function onSubmit(_data: FormData) {
-    return;
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
+    if (!paymentInfo || kycError || errorMessage || customAmountError?.hideInfos || isProcessing) return;
+    if (selectedAsset?.category === AssetCategory.PRIVATE && !flags?.includes('private')) return;
+    void handleNext(paymentInfo);
   }
 
   function setAddress() {

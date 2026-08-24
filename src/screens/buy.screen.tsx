@@ -948,7 +948,20 @@ export default function BuyScreen(): JSX.Element {
   }
 
   function onSubmit(_data: FormData) {
-    return;
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
+    if (
+      !paymentInfo ||
+      kycError ||
+      errorMessage ||
+      customAmountError ||
+      needsPersonalIbanAcknowledgement ||
+      !isQuoteFinal ||
+      isConfirming
+    ) {
+      return;
+    }
+    if (selectedAsset?.category === AssetCategory.PRIVATE && !flags?.includes('private')) return;
+    confirm(paymentInfo.id);
   }
 
   function setAddress() {

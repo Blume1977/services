@@ -675,6 +675,11 @@ describe('SwapScreen', () => {
     render(<SwapScreen />);
     await flushQuote();
     expect(screen.getByTestId('input-amount-error')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
   });
 
   it('shows amount-too-high from the quote error field', async () => {
@@ -858,14 +863,102 @@ describe('SwapScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/connect', { setRedirect: true });
   });
 
-  it('submits the empty onSubmit handler', async () => {
+  it('completes a manual transfer from form submit', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
     render(<SwapScreen />);
     await flushQuote();
     await act(async () => {
       screen.getByTestId('form-submit').click();
+      await Promise.resolve();
     });
-    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
-    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('swap-completion')).toBeInTheDocument();
+  });
+
+  it('does not complete from form submit after spend is cleared', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
+  it('does not complete from form submit after target is cleared', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit on a private asset', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate, btc];
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit when KYC blocks payment', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('quote-error')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not complete from form submit when a quote error is showing', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockReceiveFor.mockRejectedValue({ statusCode: 500, message: 'boom' });
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not start a second send while form submit is already processing', async () => {
+    mockCanSendTransaction.mockReturnValue(true);
+    mockActiveWallet = 'mm';
+    mockSendTransaction.mockImplementation(() => new Promise(() => undefined));
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockSendTransaction).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockSendTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('uses the exact You get heading when rate is 1', async () => {

@@ -1314,17 +1314,160 @@ describe('BuyScreen cleared amount protection', () => {
     expect(mockSwitchBlockchain).toHaveBeenCalled();
   });
 
-  it('submits the empty onSubmit handler', async () => {
+  it('confirms a final quote from form submit', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
     await act(async () => {
       screen.getByTestId('form-submit').click();
+      await Promise.resolve();
     });
-    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
-    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
+    await settle(() => expect(screen.getByTestId('buy-completion')).toBeInTheDocument());
+    expect(mockConfirmFor).toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit after spend is cleared', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('buy-completion')).not.toBeInTheDocument();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
+  it('does not confirm from form submit after target is cleared', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('buy-completion')).not.toBeInTheDocument();
+  });
+
+  it('does not confirm from form submit when a quote error is showing', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 500, message: 'boom' });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('boom'));
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit while the quote is not final', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice) return new Promise(() => undefined);
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit on a private asset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit when KYC blocks payment', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('quote-error')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit when amount is too low', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({ ...quoteFor(req), error: 'AmountTooLow', minVolume: 1 }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount-error')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit while personal IBAN needs acknowledgement', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() =>
+      expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument(),
+    );
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+  });
+
+  it('does not confirm from form submit while a confirm is already in flight', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockImplementation(() => new Promise(() => undefined));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).toHaveBeenCalledTimes(1);
   });
 
   it('waits for personal IBAN rows instead of quoting while the user is loading', async () => {
