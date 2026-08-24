@@ -683,16 +683,11 @@ export default function BuyScreen(): JSX.Element {
     }
 
     if (hasUnsupportedPersonalIbanRequest) {
-      const personalIbanErrorText = getPersonalIbanErrorMessage('PersonalIbanProviderUnsupported');
-      if (generation === quoteGeneration.current) {
-        setPaymentInfoState(undefined);
-        setErrorMessage(
-          personalIbanErrorText
-            ? translate('screens/payment', personalIbanErrorText)
-            : translate('screens/payment', 'The requested personal IBAN provider is not recognized.'),
-        );
-        setIsLoading(undefined);
-      }
+      setPaymentInfoState(undefined);
+      setErrorMessage(
+        translate('screens/payment', 'The requested personal IBAN provider is not recognized.'),
+      );
+      setIsLoading(undefined);
       return () => {
         isRunning = false;
       };
@@ -706,19 +701,18 @@ export default function BuyScreen(): JSX.Element {
         : {}),
     };
 
-    if (generation === quoteGeneration.current) {
-      setErrorMessage(undefined);
-      setKycError(undefined);
-      setKycMessageOverride(undefined);
-      setPaymentInfoState(undefined);
-      setIsLoading(debouncedValidatedData.sideToUpdate);
-    }
+    setErrorMessage(undefined);
+    setKycError(undefined);
+    setKycMessageOverride(undefined);
+    setPaymentInfoState(undefined);
+    setIsLoading(debouncedValidatedData.sideToUpdate);
     receiveFor(data)
       .then((buy) => {
         if (
           !isRunning ||
           generation !== quoteGeneration.current ||
-          customerIdentityRef.current !== loadingCustomerIdentity
+          customerIdentityRef.current !== loadingCustomerIdentity ||
+          !buy
         )
           return;
         validateBuy(buy);
@@ -731,10 +725,7 @@ export default function BuyScreen(): JSX.Element {
         });
         committedQuoteGeneration.current = generation;
 
-        // load exact price
-        if (buy) {
-          return receiveFor({ ...data, exactPrice: true });
-        }
+        return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
         if (
@@ -762,8 +753,8 @@ export default function BuyScreen(): JSX.Element {
           customerIdentity: loadingCustomerIdentity,
         });
         if (debouncedValidatedData.sideToUpdate === Side.SPEND) {
-          if (!spendClearedByUserRef.current) setVal('amount', info.amount.toString());
-        } else if (!targetClearedByUserRef.current) {
+          setVal('amount', info.amount.toString());
+        } else {
           setVal('targetAmount', info.estimatedAmount.toString());
         }
         setPaymentInfoState({
@@ -915,7 +906,7 @@ export default function BuyScreen(): JSX.Element {
     asset,
     targetAmount: targetAmountStr,
     paymentMethod,
-  }: Partial<FormData> = {}): BuyPaymentInfo | undefined {
+  }: Partial<FormData>): BuyPaymentInfo | undefined {
     const amount = Number(amountStr);
     const targetAmount = Number(targetAmountStr);
     if (asset != null && currency != null && paymentMethod != null) {
@@ -936,7 +927,7 @@ export default function BuyScreen(): JSX.Element {
   }
 
   function onSubmit(_data: FormData) {
-    // TODO: (Krysh fix broken form validation and onSubmit
+    return;
   }
 
   function setAddress() {
@@ -953,8 +944,6 @@ export default function BuyScreen(): JSX.Element {
 
   function confirm(id: number) {
     const confirmingGeneration = quoteGeneration.current;
-    // Refuse confirmation against a quote that no longer matches the live form generation (B4).
-    if (committedQuoteGeneration.current !== quoteGeneration.current) return;
     if (activePaymentInfoState?.isFinalQuote !== true || activePaymentInfoState.info.id !== id)
       return;
 
@@ -1006,9 +995,8 @@ export default function BuyScreen(): JSX.Element {
       });
   }
 
-  function onCreatePersonalIban() {
-    if (!selectedCurrency) return;
-    navigate({ pathname: '/buy/personal-iban', search: `?currency=${selectedCurrency.name}` }, { setRedirect: true });
+  function onCreatePersonalIban(currencyName: string) {
+    navigate({ pathname: '/buy/personal-iban', search: `?currency=${currencyName}` }, { setRedirect: true });
   }
 
   function onSwitchPersonalIbanProvider(provider: PersonalIbanProvider) {
@@ -1023,9 +1011,7 @@ export default function BuyScreen(): JSX.Element {
     setPersonalIbanProviderUnavailable(undefined);
     setContinueWithoutPersonalIban(undefined);
     setProviderOverride(undefined);
-    if (requestedPersonalIban !== undefined) {
-      setSuppressPersonalIban({ value: true, identity: customerIdentity });
-    }
+    setSuppressPersonalIban({ value: true, identity: customerIdentity });
     setAutomaticFrickSuppressed({ value: true, identity: customerIdentity });
   }
 
@@ -1320,7 +1306,7 @@ export default function BuyScreen(): JSX.Element {
                                 <StyledButton
                                   width={StyledButtonWidth.FULL}
                                   label={translate('screens/payment', 'Generate personal IBAN')}
-                                  onClick={onCreatePersonalIban}
+                                  onClick={() => onCreatePersonalIban(paymentInfo.currency.name)}
                                   color={StyledButtonColor.STURDY_WHITE}
                                 />
                               </StyledVerticalStack>

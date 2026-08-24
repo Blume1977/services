@@ -40,6 +40,7 @@ let mockSession: { address: string; blockchains: string[] } | undefined;
 let mockActiveWallet: string | undefined;
 let mockFlags: string | undefined;
 let mockHideTarget = true;
+let mockWalletBlockchain: string | undefined = 'Ethereum';
 const mockGetAsset = (list: any[], name?: string) =>
   name ? (list ?? []).find((a: any) => a.name === name || a.uniqueName === name) : undefined;
 const mockGetAssets = () => mockAssets;
@@ -265,7 +266,7 @@ jest.mock('../contexts/settings.context', () => ({
 }));
 jest.mock('../contexts/wallet.context', () => ({
   useWalletContext: () => ({
-    blockchain: 'Ethereum',
+    blockchain: mockWalletBlockchain,
     activeWallet: mockActiveWallet,
     switchBlockchain: mockSwitchBlockchain,
   }),
@@ -351,6 +352,7 @@ describe('SwapScreen', () => {
     mockActiveWallet = undefined;
     mockFlags = undefined;
     mockHideTarget = true;
+    mockWalletBlockchain = 'Ethereum';
     mockCanSendTransaction.mockReturnValue(false);
     mockGetBalances.mockResolvedValue([
       { asset: eth, amount: 10 },
@@ -728,5 +730,202 @@ describe('SwapScreen', () => {
     render(<SwapScreen />);
     await flushQuote();
     expect(screen.getByTestId('select-sourceAsset-ETH')).toBeInTheDocument();
+  });
+
+  it('quotes spend from leftover get data after a typed target and a source-asset change', async () => {
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice) return Promise.resolve(undefined);
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    await act(async () => {
+      screen.getByTestId('select-sourceAsset-BTC').click();
+    });
+    await flushQuote();
+    expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
+  });
+
+  it('groups multiple source assets on the same chain when loading balances', async () => {
+    const usdc = {
+      id: 4,
+      name: 'USDC',
+      uniqueName: 'Ethereum/USDC',
+      category: 'Public',
+      blockchain: 'Ethereum',
+      description: 'USD Coin',
+    };
+    mockAssets = [eth, usdc, btc];
+    mockGetBalances.mockResolvedValue([
+      { asset: eth, amount: 10 },
+      { asset: usdc, amount: 20 },
+      { asset: btc, amount: 1 },
+    ]);
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('select-sourceAsset-ETH')).toBeInTheDocument();
+    expect(screen.getByTestId('select-sourceAsset-USDC')).toBeInTheDocument();
+  });
+
+  it('does not restore amountIn after the user clears spend and the source asset changes', async () => {
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: '0.2' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.2');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      screen.getByTestId('select-sourceAsset-BTC').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
+  it('does not quote a zero spend amount', async () => {
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0');
+  });
+
+  it('shows the private-asset hint for a private target asset', async () => {
+    mockAssets = [eth, usdtPrivate];
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument();
+  });
+
+  it('shows payment details when the private flag is set', async () => {
+    mockAssets = [usdtPrivate];
+    mockFlags = 'private';
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT', flags: 'private' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+  });
+
+  it('falls back to the first address when the assetOut chain is missing', async () => {
+    mockHideTarget = false;
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        blockchain: undefined,
+        assetOut: 'Monero/XMR',
+        hideTargetSelection: false,
+      }),
+    );
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('form-submit')).toBeInTheDocument();
+  });
+
+  it.each([
+    'LimitExceeded',
+    'KycDataRequired',
+    'KycRequiredInstant',
+    'BankTransactionMissing',
+    'BankTransactionOrVideoMissing',
+    'VideoIdentRequired',
+    'NationalityNotAllowed',
+    'IbanCurrencyMismatch',
+    'PaymentMethodNotAllowed',
+    'TradingNotAllowed',
+    'RecommendationRequired',
+    'EmailRequired',
+  ])('routes %s through QuoteErrorHint', async (error) => {
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('quote-error')).toHaveTextContent(error);
+  });
+
+  it('renders without address items when the session is missing', async () => {
+    mockSession = undefined;
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('form-submit')).toBeInTheDocument();
+  });
+
+  it('falls back to no source asset when the wallet chain is unset and assetIn does not match', async () => {
+    mockWalletBlockchain = undefined;
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('form-submit')).toBeInTheDocument();
+  });
+
+  it('keeps the blockchain when it already matches assetOut', async () => {
+    mockUserAddresses = [{ address: '0xbtc', blockchains: ['Bitcoin'] }];
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({ assetOut: 'Bitcoin/BTC', blockchain: 'Bitcoin' }),
+    );
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(mockSetParams).not.toHaveBeenCalledWith({ blockchain: 'Bitcoin' });
+  });
+
+  it('drops a quote error that rejects after unmount', async () => {
+    let rejectQuote: (err: unknown) => void = () => undefined;
+    mockReceiveFor.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectQuote = reject;
+        }),
+    );
+    const { unmount } = render(<SwapScreen />);
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+    unmount();
+    await act(async () => {
+      rejectQuote({ statusCode: 500, message: 'late' });
+      await Promise.resolve();
+    });
+  });
+
+  it('drops a quote that resolves after unmount', async () => {
+    let resolveQuote: (value: unknown) => void = () => undefined;
+    mockReceiveFor.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveQuote = resolve;
+        }),
+    );
+    const { unmount } = render(<SwapScreen />);
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+    unmount();
+    await act(async () => {
+      resolveQuote({
+        id: 10,
+        amount: 0.1,
+        estimatedAmount: 0.01,
+        sourceAsset: eth,
+        targetAsset: btc,
+        minVolume: 0.001,
+        maxVolume: 100,
+        isValid: true,
+        exchangeRate: 1,
+        rate: 1,
+        feesTarget: {},
+        priceSteps: [],
+      });
+      await Promise.resolve();
+    });
   });
 });

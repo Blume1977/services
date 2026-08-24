@@ -344,25 +344,17 @@ export default function SellScreen(): JSX.Element {
     setIsLoading(validatedData.sideToUpdate);
     receiveFor(data)
       .then((sell) => {
-        if (isRunning) {
-          validateSell(sell);
-          setPaymentInfo(sell);
-
-          // load exact price
-          if (sell) {
-            return receiveFor({ ...data, exactPrice: true });
-          }
-        }
+        if (!isRunning || !sell) return;
+        validateSell(sell);
+        setPaymentInfo(sell);
+        return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
         if (isRunning && info) {
+          isExactPriceWriteRef.current = true;
           if (validatedData.sideToUpdate === Side.SPEND) {
-            if (!spendClearedByUserRef.current) {
-              isExactPriceWriteRef.current = true;
-              setVal('amount', info.amount.toString());
-            }
-          } else if (!targetClearedByUserRef.current) {
-            isExactPriceWriteRef.current = true;
+            setVal('amount', info.amount.toString());
+          } else {
             setVal('targetAmount', info.estimatedAmount.toString());
           }
           setPaymentInfo(info);
@@ -459,7 +451,7 @@ export default function SellScreen(): JSX.Element {
     asset,
     targetAmount: targetAmountStr,
     bankAccount,
-  }: Partial<FormData> = {}): SellPaymentInfo | undefined {
+  }: Partial<FormData>): SellPaymentInfo | undefined {
     const amount = Number(amountStr);
     const targetAmount = Number(targetAmountStr);
     if (asset != null && currency != null && bankAccount != null) {
@@ -509,7 +501,7 @@ export default function SellScreen(): JSX.Element {
   }
 
   function onSubmit(_data: FormData) {
-    // TODO: (Krysh fix broken form validation and onSubmit
+    return;
   }
 
   function setAddress() {

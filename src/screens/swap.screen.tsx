@@ -200,7 +200,7 @@ export default function SwapScreen(): JSX.Element {
     .filter((b) => filteredAssets?.some((a) => a.blockchain === b));
 
   const addressItems: Address[] =
-    userAddressItems.length > 0 && targetBlockchains?.length
+    userAddressItems.length > 0 && targetBlockchains.length
       ? [
           ...targetBlockchains.flatMap((b) => {
             const addresses = userAddressItems.filter((a) => a.blockchains.includes(b));
@@ -219,12 +219,12 @@ export default function SwapScreen(): JSX.Element {
       : [];
 
   useEffect(() => {
-    const blockchainSourceAssets = getAssets(sourceBlockchains ?? [], { sellable: true, comingSoon: false });
+    const blockchainSourceAssets = getAssets(sourceBlockchains, { sellable: true, comingSoon: false });
     const activeSourceAssets = filterAssets(blockchainSourceAssets, assetFilter);
     setSourceAssets(activeSourceAssets);
 
-    const activeTargetBlockchains = blockchain ? [blockchain as Blockchain] : (targetBlockchains ?? []);
-    const blockchainTargetAssets = getAssets(activeTargetBlockchains ?? [], { buyable: true, comingSoon: false });
+    const activeTargetBlockchains = blockchain ? [blockchain as Blockchain] : targetBlockchains;
+    const blockchainTargetAssets = getAssets(activeTargetBlockchains, { buyable: true, comingSoon: false });
     const activeTargetAssets = filterAssets(blockchainTargetAssets, assetFilter);
     setTargetAssets(activeTargetAssets);
 
@@ -396,25 +396,17 @@ export default function SwapScreen(): JSX.Element {
     setIsLoading(validatedData.sideToUpdate);
     receiveFor(data)
       .then((swap) => {
-        if (isRunning) {
-          validateSwap(swap);
-          setPaymentInfo(swap);
-
-          // load exact price
-          if (swap) {
-            return receiveFor({ ...data, exactPrice: true });
-          }
-        }
+        if (!isRunning || !swap) return;
+        validateSwap(swap);
+        setPaymentInfo(swap);
+        return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
         if (isRunning && info) {
+          isExactPriceWriteRef.current = true;
           if (validatedData.sideToUpdate === Side.SPEND) {
-            if (!spendClearedByUserRef.current) {
-              isExactPriceWriteRef.current = true;
-              setVal('amount', info.amount.toString());
-            }
-          } else if (!targetClearedByUserRef.current) {
-            isExactPriceWriteRef.current = true;
+            setVal('amount', info.amount.toString());
+          } else {
             setVal('targetAmount', info.estimatedAmount.toString());
           }
           setPaymentInfo(info);
@@ -511,7 +503,7 @@ export default function SwapScreen(): JSX.Element {
     targetAsset,
     targetAmount: targetAmountStr,
     address,
-  }: Partial<FormData> = {}): SwapPaymentInfo | undefined {
+  }: Partial<FormData>): SwapPaymentInfo | undefined {
     const amount = Number(amountStr);
     const targetAmount = Number(targetAmountStr);
     if (sourceAsset != null && targetAsset != null && address != null) {
@@ -541,22 +533,19 @@ export default function SwapScreen(): JSX.Element {
   }
 
   function getPaymentInfoString(paymentInfo: Swap): string {
-    return (
-      paymentInfo &&
-      translate(
-        'screens/swap',
-        'Send the selected amount to the address below. This address can be used multiple times, it is always the same for swaps from {{sourceChain}} to {{asset}} on {{targetChain}}.',
-        {
-          sourceChain: toString(paymentInfo.sourceAsset.blockchain),
-          targetChain: toString(paymentInfo.targetAsset.blockchain),
-          asset: paymentInfo.targetAsset.name,
-        },
-      )
+    return translate(
+      'screens/swap',
+      'Send the selected amount to the address below. This address can be used multiple times, it is always the same for swaps from {{sourceChain}} to {{asset}} on {{targetChain}}.',
+      {
+        sourceChain: toString(paymentInfo.sourceAsset.blockchain),
+        targetChain: toString(paymentInfo.targetAsset.blockchain),
+        asset: paymentInfo.targetAsset.name,
+      },
     );
   }
 
   function onSubmit(_data: FormData) {
-    // TODO: (Krysh fix broken form validation and onSubmit
+    return;
   }
 
   function setAddress() {

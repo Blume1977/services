@@ -38,13 +38,13 @@ const mockGetAsset = (list: any[], name?: string) =>
 const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockGetCurrency = (list: any[], name: string) => (list ?? []).find((c: any) => c.name === name);
 const mockGetDefaultCurrency = (list: any[]) => list?.[0];
-const mockCurrencies = [
+let mockCurrencies = [
   { name: 'EUR', sellable: true },
   { name: 'CHF', sellable: true },
   { name: 'USD', sellable: true },
 ];
 // Stable reference: buy.screen currency-selection effect depends on prefCurrency by identity.
-const mockPrefCurrency = { name: 'CHF' };
+let mockPrefCurrency: { name: string } | undefined = { name: 'CHF' };
 
 jest.mock('@dfx.swiss/react', () => {
   const buyInterface = {
@@ -334,6 +334,7 @@ jest.mock('../hooks/navigation.hook', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import BuyScreen from 'src/screens/buy.screen';
 
@@ -359,6 +360,12 @@ describe('BuyScreen quote race protection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSession = undefined;
+    mockPrefCurrency = { name: 'CHF' };
+    mockCurrencies = [
+      { name: 'EUR', sellable: true },
+      { name: 'CHF', sellable: true },
+      { name: 'USD', sellable: true },
+    ];
   });
 
   async function waitFor(callback: () => unknown) {
@@ -497,6 +504,12 @@ describe('BuyScreen cleared amount protection', () => {
     mockUser = { kyc: { level: 0 }, accountId: 1 };
     mockIsUserLoading = false;
     mockIsInitialized = true;
+    mockPrefCurrency = { name: 'CHF' };
+    mockCurrencies = [
+      { name: 'EUR', sellable: true },
+      { name: 'CHF', sellable: true },
+      { name: 'USD', sellable: true },
+    ];
     mockPersonalIbanRows = {
       activePersonalIbans: undefined,
       personalIbanRowsSettled: true,
@@ -1311,5 +1324,162 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByTestId('switch-provider').click();
     });
+  });
+
+  it('falls back to the preferred currency when assetIn is unknown', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('select-currency-CHF')).toBeInTheDocument());
+  });
+
+  it('falls back to the default currency when assetIn and preferred currency are unknown', async () => {
+    mockPrefCurrency = { name: 'GBP' };
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('select-currency-EUR')).toBeInTheDocument());
+  });
+
+  it('skips restoring currency when no preferred currency is set', async () => {
+    mockPrefCurrency = undefined;
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toBeInTheDocument());
+  });
+
+  it('does not restore currency when the currency list is empty', async () => {
+    mockCurrencies = [];
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('form-submit')).toBeInTheDocument());
+  });
+
+  it('tolerates a repeated quote signature under StrictMode', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(
+      <StrictMode>
+        <BuyScreen />
+      </StrictMode>,
+    );
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+  });
+
+  it('uses Unknown error when confirm omits a message', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockRejectedValue({});
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+      await Promise.resolve();
+    });
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('Unknown error'));
+  });
+
+  it('maps a personal-IBAN issuance failure without offering Show available IBAN', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 400, message: 'PersonalIbanIssuanceFailed' });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Show available IBAN' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to the first address when the URL chain is not in the list', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum'],
+        blockchain: 'Arbitrum',
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('form-submit')).toBeInTheDocument());
+  });
+
+  it('falls back to the first address when blockchain is unset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum'],
+        blockchain: undefined,
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('form-submit')).toBeInTheDocument());
+  });
+
+  it('does not set an address while the app is uninitialized', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockIsInitialized = false;
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum'],
+        blockchain: 'Ethereum',
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toBeInTheDocument());
+  });
+
+  it('drops a quote that resolves after unmount', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    let resolveQuote: (value: unknown) => void = () => undefined;
+    mockReceiveFor.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveQuote = resolve;
+        }),
+    );
+    const { unmount } = render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    unmount();
+    await act(async () => {
+      resolveQuote(quoteFor({ amount: 300 }));
+      await Promise.resolve();
+    });
+  });
+
+  it('does not quote a zero spend amount', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('0'));
+  });
+
+  it('uses availableBlockchains when both wallet and URL chain are unset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({ blockchain: undefined, availableBlockchains: ['Ethereum'] }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('select-asset-BTC')).toBeInTheDocument());
   });
 });
