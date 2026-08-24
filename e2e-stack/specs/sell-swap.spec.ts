@@ -446,14 +446,9 @@ test.describe('Sell + Swap e2e', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('/sell currency dropdown offers non-sellable fiats (sell.hook filters buyable, not sellable)', async ({
+  test('/sell currency dropdown only offers sellable fiats', async ({
     page,
   }) => {
-    // CONFIRMED product bug: sell.hook.js's currency dropdown filters options on
-    // buyable || cardBuyable || instantBuyable instead of sellable, so it can offer fiats that
-    // POST /sell would reject. Remove this test.fail() once the hook filters on `sellable`.
-    test.fail(true, 'sell.hook.js filters currency options on buyable||cardBuyable||instantBuyable, not sellable');
-
     const user = await createUser({
       walletIndex: nextWalletIndex(),
       tag: 'sell-fiat',
@@ -481,8 +476,6 @@ test.describe('Sell + Swap e2e', () => {
     const offered = fiatCodes.filter((code) => optionTexts.some((t) => t === code || t.startsWith(code)));
     expect(offered.length, 'currency dropdown should list at least one fiat').toBeGreaterThan(0);
 
-    // Correct behaviour: every offered currency must be sellable. Fails today (test.fail above)
-    // because the hook filters on the wrong flag; passes once the hook is fixed.
     for (const name of offered) {
       expect(sellableNames.includes(name), `currency "${name}" must be sellable`).toBe(true);
     }
@@ -878,11 +871,6 @@ test.describe('Sell + Swap e2e', () => {
   });
 
   test('/sell?bank-account=<iban> selects the account once instead of recreating it', async ({ page }) => {
-    // Measured: the screen answers this parameter by posting /v1/bankAccount over and over — more
-    // than thirty times in twenty seconds — and never gets as far as requesting payment
-    // information, so the sell flow cannot complete at all when the link carries the parameter.
-    // Reported to the team. Remove test.fail() once one request is enough.
-    test.fail(true, 'A bank-account deep link makes /sell create bank accounts in a loop and never price.');
     test.setTimeout(75000);
 
     const user = await createUser({

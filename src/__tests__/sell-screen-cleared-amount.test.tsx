@@ -13,6 +13,7 @@ const mockLayoutOptions = jest.fn();
 
 const chf = { name: 'CHF', sellable: true };
 const eur = { name: 'EUR', sellable: true };
+const gbp = { name: 'GBP', sellable: false };
 const eth = {
   id: 1,
   name: 'ETH',
@@ -50,7 +51,7 @@ const mockGetAssets = () => mockAssets;
 const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockGetCurrency = (list: any[], name?: string) => (list ?? []).find((c: any) => c.name === name);
 const mockGetDefaultCurrency = (list: any[]) => list?.[0];
-const mockCurrencies = [chf, eur];
+const mockCurrencies = [chf, eur, gbp];
 const mockFormatIban = jest.fn((iban: string) => iban);
 let mockWalletBlockchain: string | undefined = 'Ethereum';
 let mockPrefCurrency: { name: string } | undefined;
@@ -1055,6 +1056,13 @@ describe('SellScreen', () => {
       jest.advanceTimersByTime(500);
     });
     expect(screen.getByTestId('input-amount')).toBeInTheDocument();
+  });
+
+  it('omits currencies that are not sellable from the dropdown', async () => {
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('dropdown-currency')).toHaveTextContent('CHF');
+    expect(screen.getByTestId('dropdown-currency')).not.toHaveTextContent('GBP');
   });
 
   it('falls back to the preferred currency when assetOut is unknown', async () => {

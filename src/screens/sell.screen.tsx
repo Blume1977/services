@@ -34,7 +34,7 @@ import {
   StyledSearchDropdown,
   StyledVerticalStack,
 } from '@dfx.swiss/react-components';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FieldPath, FieldPathValue, useForm, useWatch } from 'react-hook-form';
 import { BankAccountSelector } from 'src/components/order/bank-account-selector';
 import { AddressSwitch } from 'src/components/payment/address-switch';
@@ -123,6 +123,7 @@ export default function SellScreen(): JSX.Element {
   } = useAppParams();
   const { toDescription, getCurrency, getDefaultCurrency } = useFiat();
   const { currencies, receiveFor } = useSell();
+  const sellableCurrencies = useMemo(() => currencies?.filter((c) => c.sellable), [currencies]);
   const { toString } = useBlockchain();
   const { rootRef } = useLayoutContext();
 
@@ -202,11 +203,11 @@ export default function SellScreen(): JSX.Element {
 
   useEffect(() => {
     const currency =
-      getCurrency(currencies, assetOut) ??
-      getCurrency(currencies, prefCurrency?.name) ??
-      getDefaultCurrency(currencies);
+      getCurrency(sellableCurrencies, assetOut) ??
+      getCurrency(sellableCurrencies, prefCurrency?.name) ??
+      getDefaultCurrency(sellableCurrencies);
     if (prefCurrency && currency) setVal('currency', currency);
-  }, [assetOut, getCurrency, prefCurrency, currencies]);
+  }, [assetOut, getCurrency, prefCurrency, sellableCurrencies]);
 
   useEffect(() => {
     if (amountIn) {
@@ -615,7 +616,7 @@ export default function SellScreen(): JSX.Element {
           translate={translateError}
           hasFormElement={false}
         >
-          {availableAssets && currencies && bankAccounts && (
+          {availableAssets && sellableCurrencies && bankAccounts && (
             <StyledVerticalStack gap={8} full center className="relative">
               <StyledVerticalStack gap={2} full>
                 <h2 className="text-dfxGray-700">{translate('screens/buy', 'You spend')}</h2>
@@ -704,7 +705,7 @@ export default function SellScreen(): JSX.Element {
                       rootRef={rootRef}
                       name="currency"
                       placeholder={translate('general/actions', 'Select') + '...'}
-                      items={currencies}
+                      items={sellableCurrencies}
                       labelFunc={(item) => item.name}
                       descriptionFunc={(item) => toDescription(item)}
                       full
