@@ -480,6 +480,20 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('input-amount')).toHaveValue('0.3');
   });
 
+  it('clears a KYC quote error when the user empties the spend field', async () => {
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('quote-error')).toHaveTextContent('KycRequired');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    expect(screen.queryByTestId('quote-error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
   it('keeps a cleared amount field empty and accepts the retyped amount', async () => {
     render(<SwapScreen />);
     await flushQuote();

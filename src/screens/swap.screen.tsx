@@ -338,6 +338,10 @@ export default function SwapScreen(): JSX.Element {
       } else if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
         setValidatedData(undefined);
         setPaymentInfo(undefined);
+        setKycError(undefined);
+        setErrorMessage(undefined);
+        setCustomAmountError(undefined);
+        setIsLoading(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
@@ -375,6 +379,10 @@ export default function SwapScreen(): JSX.Element {
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         setValidatedData(undefined);
         setPaymentInfo(undefined);
+        setKycError(undefined);
+        setErrorMessage(undefined);
+        setCustomAmountError(undefined);
+        setIsLoading(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }
@@ -397,6 +405,7 @@ export default function SwapScreen(): JSX.Element {
     let isRunning = true;
 
     setErrorMessage(undefined);
+    setKycError(undefined);
     setPaymentInfo(undefined);
     setIsLoading(undefined);
 
