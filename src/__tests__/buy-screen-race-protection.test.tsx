@@ -1266,6 +1266,26 @@ describe('BuyScreen cleared amount protection', () => {
     unmount();
   });
 
+  it('does not resume a stale quote after a selector change on a retyped spend field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    const { rerender, unmount } = render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(screen.getByTestId('input-amount')).toHaveValue('300');
+    const callsBeforeRetype = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '400' } });
+      mockPersonalIban.mockReturnValue('Frick');
+      rerender(<BuyScreen />);
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('400');
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('400'));
+    const afterRetype = mockReceiveFor.mock.calls.slice(callsBeforeRetype);
+    expect(afterRetype.every((call: any) => Number(call[0]?.amount) !== 300)).toBe(true);
+    unmount();
+  });
+
   it('shows a personal-IBAN KYC hint when an explicit Frick selector is rejected', async () => {
     mockPersonalIban.mockReturnValue('Frick');
     mockUseAppParams.mockReturnValue(baseAppParams());

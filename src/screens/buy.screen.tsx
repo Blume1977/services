@@ -675,11 +675,18 @@ export default function BuyScreen(): JSX.Element {
     }
 
     // Live clear invalidates immediately; debounce can still hold the previous request.
-    // Extra effect deps (personal-IBAN rows, provider, retry) must not restart that request.
+    // Extra effect deps (personal-IBAN rows, provider, retry) must not restart that request,
+    // including when the user already typed a new non-empty amount.
     if (
       !validatedData ||
       spendClearedByUserRef.current ||
-      targetClearedByUserRef.current
+      targetClearedByUserRef.current ||
+      validatedData.sideToUpdate !== debouncedValidatedData.sideToUpdate ||
+      validatedData.amount !== debouncedValidatedData.amount ||
+      validatedData.targetAmount !== debouncedValidatedData.targetAmount ||
+      validatedData.currency?.name !== debouncedValidatedData.currency?.name ||
+      validatedData.asset?.uniqueName !== debouncedValidatedData.asset?.uniqueName ||
+      validatedData.paymentMethod !== debouncedValidatedData.paymentMethod
     ) {
       setIsLoading(undefined);
       return () => {
