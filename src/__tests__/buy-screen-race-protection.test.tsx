@@ -169,7 +169,7 @@ jest.mock('@dfx.swiss/react-components', () => {
     StyledHorizontalStack: ({ children }: any) => <div>{children}</div>,
     StyledInfoText: ({ children }: any) => <div>{children}</div>,
     // Interactive so the clear/retype protection can drive the amount fields like a user would.
-    StyledInput: ({ name, control, forceErrorMessage }: any) =>
+    StyledInput: ({ name, control, forceErrorMessage, loading, disabled }: any) =>
       name ? (
         <Controller
           name={name}
@@ -179,6 +179,7 @@ jest.mock('@dfx.swiss/react-components', () => {
               <input
                 data-testid={`input-${name}`}
                 value={field.value ?? ''}
+                disabled={Boolean(loading || disabled)}
                 onChange={(e: any) => field.onChange(e.target.value)}
               />
               {forceErrorMessage && <div data-testid={`input-${name}-error`}>{forceErrorMessage}</div>}
@@ -187,7 +188,7 @@ jest.mock('@dfx.swiss/react-components', () => {
         />
       ) : null,
     StyledLink: ({ children, label }: any) => <div>{label ?? children}</div>,
-    StyledLoadingSpinner: () => null,
+    StyledLoadingSpinner: () => <div data-testid="loading-spinner" />,
     StyledSearchDropdown: ({ name, items, labelFunc, control, filterFunc, descriptionFunc, assetIconFunc }: any) => (
       <Controller
         name={name}
@@ -660,6 +661,8 @@ describe('BuyScreen cleared amount protection', () => {
     });
     await settle(() => expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument());
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(mockReceiveFor.mock.calls.length).toBe(callsBeforeClear);
 
     // Retyping works: the quote is requested for exactly the typed amount and the echo still
@@ -689,7 +692,7 @@ describe('BuyScreen cleared amount protection', () => {
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
   });
 
-  it('accepts a retyped target amount without clobbering the spend field', async () => {
+  it('accepts a retyped target amount as the quote source', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
@@ -708,8 +711,8 @@ describe('BuyScreen cleared amount protection', () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
     });
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
-    // Typed side stays; exact-price may write the computed spend side.
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.01');
+    expect(screen.getByTestId('input-amount')).not.toHaveValue('');
     const retyped = mockReceiveFor.mock.calls.slice(callsBeforeClear);
     expect(retyped.length).toBeGreaterThan(0);
     expect(retyped.every((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
@@ -1232,8 +1235,11 @@ describe('BuyScreen cleared amount protection', () => {
       rerender(<BuyScreen />);
     });
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(
       mockReceiveFor.mock.calls.every((call: any) => call[0]?.amount !== 300 && Number(call[0]?.amount) !== 300),
     ).toBe(true);
@@ -1252,8 +1258,11 @@ describe('BuyScreen cleared amount protection', () => {
       rerender(<BuyScreen />);
     });
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+    expect(screen.getByTestId('input-targetAmount')).not.toBeDisabled();
     await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+    expect(screen.getByTestId('input-targetAmount')).not.toBeDisabled();
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     unmount();
   });
 
@@ -1402,7 +1411,7 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('select-asset-BTC')).toBeInTheDocument());
   });
 
-  it('skips payment-method defaults while the app is uninitialized', async () => {
+  it('renders the spend field while the app is uninitialized', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockIsInitialized = false;
     mockUseAppParams.mockReturnValue(baseAppParams());
@@ -1422,7 +1431,7 @@ describe('BuyScreen cleared amount protection', () => {
     expect(mockReceiveFor.mock.calls.every((call: any) => !call[0]?.exactPrice)).toBe(true);
   });
 
-  it('uses availableBlockchains when wallet and URL blockchain are unset', async () => {
+  it('renders when wallet, URL blockchain and availableBlockchains are unset', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(
       baseAppParams({ blockchain: undefined, availableBlockchains: undefined, assetOut: 'NOPE' }),
@@ -1456,6 +1465,7 @@ describe('BuyScreen cleared amount protection', () => {
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.paymentMethod === 'Bank')).toBe(true);
   });
 
   it('switches from a verified Yapeal quote to Frick', async () => {
@@ -1501,7 +1511,7 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('select-currency-EUR')).toBeInTheDocument());
   });
 
-  it('skips restoring currency when no preferred currency is set', async () => {
+  it('renders when no preferred currency is set', async () => {
     mockPrefCurrency = undefined;
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
@@ -1510,7 +1520,7 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('input-amount')).toBeInTheDocument());
   });
 
-  it('does not restore currency when the currency list is empty', async () => {
+  it('renders when the currency list is empty', async () => {
     mockCurrencies = [];
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
@@ -1554,7 +1564,7 @@ describe('BuyScreen cleared amount protection', () => {
     expect(screen.queryByRole('button', { name: 'Show available IBAN' })).not.toBeInTheDocument();
   });
 
-  it('falls back to the first address when the URL chain is not in the list', async () => {
+  it('renders the form when the URL chain is not in the address list', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockSession = { address: '0xabc' };
     mockUseAppParams.mockReturnValue(
@@ -1569,7 +1579,7 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('form-submit')).toBeInTheDocument());
   });
 
-  it('falls back to the first address when blockchain is unset', async () => {
+  it('renders the form when blockchain is unset', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockSession = { address: '0xabc' };
     mockUseAppParams.mockReturnValue(
@@ -1584,7 +1594,7 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('form-submit')).toBeInTheDocument());
   });
 
-  it('does not set an address while the app is uninitialized', async () => {
+  it('renders while uninitialized with a session address present', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockIsInitialized = false;
     mockSession = { address: '0xabc' };

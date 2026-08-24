@@ -161,7 +161,7 @@ jest.mock('@dfx.swiss/react-components', () => {
       />
     ),
     StyledHorizontalStack: ({ children }: any) => <div>{children}</div>,
-    StyledInput: ({ name, control, buttonLabel, buttonClick, forceErrorMessage }: any) =>
+    StyledInput: ({ name, control, buttonLabel, buttonClick, forceErrorMessage, loading, disabled }: any) =>
       name ? (
         <Controller
           name={name}
@@ -171,6 +171,7 @@ jest.mock('@dfx.swiss/react-components', () => {
               <input
                 data-testid={`input-${name}`}
                 value={field.value ?? ''}
+                disabled={Boolean(loading || disabled)}
                 onChange={(e: any) => field.onChange(e.target.value)}
               />
               {buttonLabel && (
@@ -569,6 +570,8 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(mockReceiveFor.mock.calls.length).toBe(callsBeforeClear);
 
     await act(async () => {
@@ -864,7 +867,7 @@ describe('SwapScreen', () => {
     expect(mockSwitchBlockchain).toHaveBeenCalledWith('Bitcoin');
   });
 
-  it('picks the assetOut chain for the default address when blockchain is unset', async () => {
+  it('shows the address dropdown when blockchain is unset and assetOut is set', async () => {
     mockHideTarget = false;
     mockUseAppParams.mockReturnValue(
       baseAppParams({ blockchain: undefined, assetOut: 'Bitcoin/BTC', hideTargetSelection: false }),
@@ -1030,7 +1033,7 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('payment-info')).toBeInTheDocument();
   });
 
-  it('falls back to the first address when the assetOut chain is missing', async () => {
+  it('renders the form when the assetOut chain is missing', async () => {
     mockHideTarget = false;
     mockUseAppParams.mockReturnValue(
       baseAppParams({
@@ -1064,14 +1067,14 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('quote-error')).toHaveTextContent(error);
   });
 
-  it('renders without address items when the session is missing', async () => {
+  it('renders the form when the session is missing', async () => {
     mockSession = undefined;
     render(<SwapScreen />);
     await flushQuote();
     expect(screen.getByTestId('form-submit')).toBeInTheDocument();
   });
 
-  it('falls back to no source asset when the wallet chain is unset and assetIn does not match', async () => {
+  it('renders when the wallet chain is unset and assetIn does not match', async () => {
     mockWalletBlockchain = undefined;
     mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
     render(<SwapScreen />);

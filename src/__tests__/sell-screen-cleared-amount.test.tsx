@@ -178,7 +178,7 @@ jest.mock('@dfx.swiss/react-components', () => {
       />
     ),
     StyledHorizontalStack: ({ children }: any) => <div>{children}</div>,
-    StyledInput: ({ name, control, buttonLabel, buttonClick, forceErrorMessage }: any) =>
+    StyledInput: ({ name, control, buttonLabel, buttonClick, forceErrorMessage, loading, disabled }: any) =>
       name ? (
         <Controller
           name={name}
@@ -188,6 +188,7 @@ jest.mock('@dfx.swiss/react-components', () => {
               <input
                 data-testid={`input-${name}`}
                 value={field.value ?? ''}
+                disabled={Boolean(loading || disabled)}
                 onChange={(e: any) => field.onChange(e.target.value)}
               />
               {buttonLabel && (
@@ -630,6 +631,8 @@ describe('SellScreen', () => {
     await flushQuote();
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
+    expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(mockReceiveFor.mock.calls.length).toBe(callsBeforeClear);
 
     await act(async () => {
@@ -1069,7 +1072,7 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('select-currency-0')).toBeInTheDocument();
   });
 
-  it('skips restoring currency when no preferred currency is set', async () => {
+  it('renders when no preferred currency is set', async () => {
     mockPrefCurrency = undefined;
     mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'NOPE' }));
     render(<SellScreen />);
@@ -1106,7 +1109,7 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('payment-info-text')).toBeInTheDocument();
   });
 
-  it('falls back to the first address when the URL chain is not in the list', async () => {
+  it('renders the form when the URL chain is not in the address list', async () => {
     mockSession = { address: '0xabc' };
     mockHideTarget = false;
     mockUseAppParams.mockReturnValue(
@@ -1121,7 +1124,7 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('form-submit')).toBeInTheDocument();
   });
 
-  it('does not set an address while the app is uninitialized', async () => {
+  it('renders while uninitialized with a session address present', async () => {
     mockIsInitialized = false;
     mockSession = { address: '0xabc' };
     mockHideTarget = false;
@@ -1152,7 +1155,7 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('input-amount')).toHaveValue('');
   });
 
-  it('does not select an asset when no chain and no matching asset exist', async () => {
+  it('renders when no chain and no matching asset exist', async () => {
     mockWalletBlockchain = undefined;
     mockUseAppParams.mockReturnValue(
       baseAppParams({ assetIn: 'NOPE', blockchain: undefined, availableBlockchains: undefined }),
