@@ -403,13 +403,19 @@ export default function SwapScreen(): JSX.Element {
       })
       .then((info) => {
         if (isRunning && info) {
-          isExactPriceWriteRef.current = true;
-          if (validatedData.sideToUpdate === Side.SPEND) {
-            setVal('amount', info.amount.toString());
-          } else {
-            setVal('targetAmount', info.estimatedAmount.toString());
+          const skipWrite =
+            validatedData.sideToUpdate === Side.SPEND
+              ? spendClearedByUserRef.current
+              : targetClearedByUserRef.current;
+          if (!skipWrite) {
+            isExactPriceWriteRef.current = true;
+            if (validatedData.sideToUpdate === Side.SPEND) {
+              setVal('amount', info.amount.toString());
+            } else {
+              setVal('targetAmount', info.estimatedAmount.toString());
+            }
+            setPaymentInfo(info);
           }
-          setPaymentInfo(info);
         }
       })
       .catch((error: ApiError) => {

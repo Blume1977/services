@@ -407,6 +407,62 @@ describe('SellScreen', () => {
     jest.useRealTimers();
   });
 
+  it('does not write exact-price into a spend field cleared while a spend-side quote is in flight', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<SellScreen />);
+    await flushQuote();
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '100' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      resolveExact(quoteFor({ targetAmount: 100, exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+  });
+
+  it('does not write exact-price into a target field cleared while a get-side quote is in flight', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<SellScreen />);
+    await flushQuote();
+    hangExact = true;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await act(async () => {
+      resolveExact(quoteFor({ amount: 0.2, exactPrice: true }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+  });
+
   it('keeps a cleared amount field empty and accepts the retyped amount', async () => {
     render(<SellScreen />);
     await flushQuote();
