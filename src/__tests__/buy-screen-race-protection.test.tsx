@@ -920,6 +920,15 @@ describe('BuyScreen cleared amount protection', () => {
     });
   });
 
+  it('blocks an unrecognized personal IBAN selector', async () => {
+    mockPersonalIban.mockReturnValue('nope');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument();
+  });
+
   it('navigates to generate a personal IBAN from a non-Frick currency', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
