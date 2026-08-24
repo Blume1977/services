@@ -515,9 +515,20 @@ describe('SellScreen', () => {
   });
 
   it('still invalidates quotes when target is cleared after an exact-price no-op write', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
     render(<SellScreen />);
     await flushQuote();
     const targetBefore = (screen.getByTestId('input-targetAmount') as HTMLInputElement).value;
+    hangExact = true;
     await act(async () => {
       screen.getByTestId('select-currency-1').click();
     });
@@ -526,14 +537,28 @@ describe('SellScreen', () => {
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
     });
-    await flushQuote();
+    await act(async () => {
+      resolveExact(quoteFor({ amount: 0.1, exactPrice: true }));
+      await Promise.resolve();
+    });
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
 
   it('still invalidates quotes when spend is cleared after an exact-price no-op write', async () => {
+    let resolveExact: (value: unknown) => void = () => undefined;
+    let hangExact = false;
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice && hangExact) {
+        return new Promise((resolve) => {
+          resolveExact = resolve;
+        });
+      }
+      return Promise.resolve(quoteFor(req));
+    });
     render(<SellScreen />);
     await flushQuote();
+    hangExact = true;
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '100' } });
     });
@@ -542,7 +567,10 @@ describe('SellScreen', () => {
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
-    await flushQuote();
+    await act(async () => {
+      resolveExact(quoteFor({ targetAmount: 100, exactPrice: true }));
+      await Promise.resolve();
+    });
     expect(screen.getByTestId('input-amount')).toHaveValue('');
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
