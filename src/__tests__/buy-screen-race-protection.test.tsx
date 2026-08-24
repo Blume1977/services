@@ -16,6 +16,14 @@ const mockEmptyPersonalIbans: never[] = [];
 const mockTranslate = (_ns: string, key: string) => key;
 const mockTranslateError = (key: string) => key;
 let mockSession: { address: string } | undefined;
+let mockUser: { kyc: { level: number }; accountId: number } = { kyc: { level: 0 }, accountId: 1 };
+let mockIsUserLoading = false;
+let mockIsInitialized = true;
+let mockPersonalIbanRows = {
+  activePersonalIbans: undefined as unknown[] | undefined,
+  personalIbanRowsSettled: true,
+  userLoadTimedOut: false,
+};
 
 const mockAssets = [
   { name: 'BTC', uniqueName: 'Bitcoin', category: 'Public', blockchain: 'Ethereum', description: 'Bitcoin' },
@@ -25,8 +33,8 @@ const mockAssets = [
 ];
 const mockAssetsMap = new Map([['Ethereum', mockAssets]]);
 const mockGetAssets = () => mockAssets;
-const mockGetAsset = (list: any[], name: string) =>
-  (list ?? []).find((a: any) => a.name === name) ?? list?.[0];
+const mockGetAsset = (list: any[], name?: string) =>
+  name ? (list ?? []).find((a: any) => a.name === name || a.uniqueName === name) : undefined;
 const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockGetCurrency = (list: any[], name: string) => (list ?? []).find((c: any) => c.name === name);
 const mockGetDefaultCurrency = (list: any[]) => list?.[0];
@@ -88,7 +96,7 @@ jest.mock('@dfx.swiss/react', () => {
       getDefaultCurrency: mockGetDefaultCurrency,
     }),
     useSessionContext: () => ({ logout: mockLogout }),
-    useUserContext: () => ({ user: { kyc: { level: 0 }, accountId: 1 }, isUserLoading: false }),
+    useUserContext: () => ({ user: mockUser, isUserLoading: mockIsUserLoading }),
   };
 });
 
@@ -209,7 +217,20 @@ jest.mock('@dfx.swiss/react-components', () => {
 });
 
 jest.mock('src/components/payment/payment-info-buy', () => ({
-  PaymentInformationContent: ({ info }: any) => <div data-testid="payment-info">{info.amount}</div>,
+  PaymentInformationContent: ({ info, personalIbanProviderSwitch }: any) => (
+    <div>
+      <div data-testid="payment-info">{info.amount}</div>
+      {personalIbanProviderSwitch && (
+        <button
+          type="button"
+          data-testid="switch-provider"
+          onClick={() => personalIbanProviderSwitch.onSwitch(personalIbanProviderSwitch.target)}
+        >
+          switch
+        </button>
+      )}
+    </div>
+  ),
 }));
 jest.mock('../components/error-hint', () => ({ ErrorHint: ({ message }: any) => <div data-testid="error-hint">{message}</div> }));
 jest.mock('../components/exchange-rate', () => ({ ExchangeRate: () => <div data-testid="exchange-rate" /> }));
@@ -243,7 +264,7 @@ jest.mock('../config/labels', () => ({
 }));
 
 jest.mock('../contexts/app-handling.context', () => ({
-  useAppHandlingContext: () => ({ isInitialized: true }),
+  useAppHandlingContext: () => ({ isInitialized: mockIsInitialized }),
 }));
 jest.mock('../contexts/layout.context', () => ({
   useLayoutContext: () => ({ scrollToTop: jest.fn(), rootRef: { current: null } }),
@@ -296,6 +317,9 @@ jest.mock('../hooks/personal-iban.hook', () => ({
     customerIdentity: 1,
     hasAuthenticatedCustomer: true,
   }),
+}));
+jest.mock('../hooks/personal-iban-rows.hook', () => ({
+  usePersonalIbanRows: () => mockPersonalIbanRows,
 }));
 jest.mock('../hooks/blockchain.hook', () => ({
   useBlockchain: () => ({ toString: () => '' }),
@@ -470,6 +494,14 @@ describe('BuyScreen cleared amount protection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSession = undefined;
+    mockUser = { kyc: { level: 0 }, accountId: 1 };
+    mockIsUserLoading = false;
+    mockIsInitialized = true;
+    mockPersonalIbanRows = {
+      activePersonalIbans: undefined,
+      personalIbanRowsSettled: true,
+      userLoadTimedOut: false,
+    };
   });
 
   async function settle(callback: () => unknown) {
@@ -487,7 +519,7 @@ describe('BuyScreen cleared amount protection', () => {
       id: 10,
       // the exact-price echo answers with the Rappen-exact equivalent, not the typed amount
       amount: req.exactPrice ? Number((spendAmount - 0.02).toFixed(2)) : spendAmount,
-      currency: { name: 'CHF' },
+      currency: { name: req.currency?.name ?? 'CHF' },
       estimatedAmount: req.exactPrice ? 0.004709 : 0.0047,
       asset: { name: 'BTC', uniqueName: 'Bitcoin' },
       minVolume: 1,
@@ -813,6 +845,98 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByText('You get about')).toBeInTheDocument());
   });
 
+  it('ignores confirm when the quote is not yet final', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => {
+      if (req.exactPrice) return new Promise(() => undefined);
+      return Promise.resolve(quoteFor(req));
+    });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+      await Promise.resolve();
+    });
+    expect(mockConfirmFor).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('buy-completion')).not.toBeInTheDocument();
+  });
+
+  it('drops a stale quote error after the form generation moved on', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    const rejectors: Array<(err: unknown) => void> = [];
+    mockReceiveFor.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectors.push(reject);
+        }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await settle(() => expect(rejectors.length).toBeGreaterThan(1));
+    await act(async () => {
+      rejectors[0]({ statusCode: 500, message: 'stale' });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('stale')).not.toBeInTheDocument();
+  });
+
+  it('drops a confirm result after the quote generation moved on', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    let resolveConfirm: (value?: unknown) => void = () => undefined;
+    mockConfirmFor.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await act(async () => {
+      resolveConfirm();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('buy-completion')).not.toBeInTheDocument();
+  });
+
+  it('drops a confirm error after the quote generation moved on', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    let rejectConfirm: (err: unknown) => void = () => undefined;
+    mockConfirmFor.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectConfirm = reject;
+        }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await act(async () => {
+      rejectConfirm({ message: 'stale-confirm' });
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('stale-confirm')).not.toBeInTheDocument();
+  });
+
   it('confirms a final quote', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
@@ -920,6 +1044,110 @@ describe('BuyScreen cleared amount protection', () => {
     });
   });
 
+  it('waits for personal IBAN rows instead of quoting while the user is loading', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockIsUserLoading = true;
+    mockPersonalIbanRows = {
+      activePersonalIbans: undefined,
+      personalIbanRowsSettled: false,
+      userLoadTimedOut: false,
+    };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(mockReceiveFor).not.toHaveBeenCalled();
+  });
+
+  it('shows a personal-IBAN KYC hint when an explicit Frick selector is rejected', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 400, message: 'KycRequired' });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('quote-error')).toBeInTheDocument());
+    expect(screen.getByTestId('quote-error')).toHaveTextContent('KycRequired');
+  });
+
+  it('offers Show available IBAN when the requested provider is missing', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 400, message: 'PersonalIbanProviderNotAvailable' });
+    render(<BuyScreen />);
+    await settle(() =>
+      expect(screen.getByRole('button', { name: 'Show available IBAN' })).toBeInTheDocument(),
+    );
+    await act(async () => {
+      screen.getByRole('button', { name: 'Show available IBAN' }).click();
+    });
+  });
+
+  it('suppresses automatic Frick after a KYC rejection when a Yapeal row exists', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUser = { kyc: { level: 50 }, accountId: 1 };
+    mockPersonalIbanRows = {
+      activePersonalIbans: [
+        { bank: 'Yapeal', currency: 'CHF', active: true, acceptsPayments: true },
+      ],
+      personalIbanRowsSettled: true,
+      userLoadTimedOut: false,
+    };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor
+      .mockRejectedValueOnce({ statusCode: 400, message: 'KycRequired' })
+      .mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(mockReceiveFor.mock.calls.length).toBeGreaterThan(0));
+  });
+
+  it('acknowledges a failed Frick verification and continues without the selector', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() =>
+      expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument(),
+    );
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
+    });
+  });
+
+  it('maps a non-KYC personal-IBAN HTTP error onto QuoteErrorHint', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 400, message: 'EmailRequired' });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('quote-error')).toHaveTextContent('EmailRequired'));
+  });
+
+  it('switches personal IBAN provider on a verified Frick quote', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUser = { kyc: { level: 50 }, accountId: 1 };
+    mockPersonalIbanRows = {
+      activePersonalIbans: [
+        { bank: 'Yapeal', currency: 'CHF', active: true, acceptsPayments: true },
+      ],
+      personalIbanRowsSettled: true,
+      userLoadTimedOut: false,
+    };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({
+        ...quoteFor(req),
+        isPersonalIban: true,
+        bank: 'Bank Frick',
+        name: 'DFX AG',
+      }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('switch-provider')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('switch-provider').click();
+    });
+  });
+
   it('blocks an unrecognized personal IBAN selector', async () => {
     mockPersonalIban.mockReturnValue('nope');
     mockUseAppParams.mockReturnValue(baseAppParams());
@@ -927,6 +1155,9 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('error-hint')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
+    });
   });
 
   it('navigates to generate a personal IBAN from a non-Frick currency', async () => {
@@ -943,5 +1174,101 @@ describe('BuyScreen cleared amount protection', () => {
       screen.getByRole('button', { name: 'Generate personal IBAN' }).click();
     });
     expect(mockNavigate).toHaveBeenCalled();
+  });
+
+  it('treats a user with a different account id as not the active customer', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUser = { kyc: { level: 50 }, accountId: 99 };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+  });
+
+  it('falls back to the first asset when assetOut does not match', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'NOPE', blockchain: 'Ethereum' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('select-asset-BTC')).toBeInTheDocument());
+  });
+
+  it('skips payment-method defaults while the app is uninitialized', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockIsInitialized = false;
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toBeInTheDocument());
+  });
+
+  it('does not request an exact price when the first quote is empty', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      req.exactPrice ? Promise.resolve(quoteFor(req)) : Promise.resolve(undefined),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(mockReceiveFor).toHaveBeenCalled());
+    expect(mockReceiveFor.mock.calls.every((call: any) => !call[0]?.exactPrice)).toBe(true);
+  });
+
+  it('uses availableBlockchains when wallet and URL blockchain are unset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({ blockchain: undefined, availableBlockchains: undefined, assetOut: 'NOPE' }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toBeInTheDocument());
+  });
+
+  it('continues without personal IBAN when Frick is inapplicable for the currency', async () => {
+    mockPersonalIban.mockReturnValue('Frick');
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await act(async () => {
+      screen.getByTestId('select-currency-USD').click();
+    });
+    await settle(() =>
+      expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument(),
+    );
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
+    });
+  });
+
+  it('maps an Instant paymentMethod param onto bank', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ paymentMethod: 'Instant' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+  });
+
+  it('switches from a verified Yapeal quote to Frick', async () => {
+    mockPersonalIban.mockReturnValue('Yapeal');
+    mockUser = { kyc: { level: 50 }, accountId: 1 };
+    mockPersonalIbanRows = {
+      activePersonalIbans: [{ bank: 'Yapeal', currency: 'CHF', active: true, acceptsPayments: true }],
+      personalIbanRowsSettled: true,
+      userLoadTimedOut: false,
+    };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({
+        ...quoteFor(req),
+        isPersonalIban: true,
+        bank: 'Yapeal',
+        name: 'Customer',
+      }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('switch-provider')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('switch-provider').click();
+    });
   });
 });

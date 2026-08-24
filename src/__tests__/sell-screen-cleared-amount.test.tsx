@@ -43,7 +43,8 @@ let mockSession: { address: string } | undefined;
 let mockActiveWallet: string | undefined;
 let mockFlags: string | undefined;
 let mockHideTarget = true;
-const mockGetAsset = (list: any[], name?: string) => (list ?? []).find((a: any) => a.name === name) ?? list?.[0];
+const mockGetAsset = (list: any[], name?: string) =>
+  name ? (list ?? []).find((a: any) => a.name === name) : undefined;
 const mockGetAssets = () => mockAssets;
 const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockGetCurrency = (list: any[], name?: string) => (list ?? []).find((c: any) => c.name === name);
@@ -735,5 +736,26 @@ describe('SellScreen', () => {
       screen.getByRole('button', { name: 'Retry' }).click();
     });
     expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
+  });
+
+  it('skips the exact-price request when the first quote is empty', async () => {
+    mockReceiveFor.mockResolvedValueOnce(undefined);
+    render(<SellScreen />);
+    await flushQuote();
+    expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice)).toBe(false);
+  });
+
+  it('renders empty balances in the asset dropdown', async () => {
+    mockGetBalances.mockResolvedValue([]);
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('select-asset-ETH')).toBeInTheDocument();
+  });
+
+  it('falls back to the first asset when assetIn does not match', async () => {
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('select-asset-ETH')).toBeInTheDocument();
   });
 });

@@ -697,4 +697,18 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.getByTestId('select-sourceAsset-BTC')).toBeInTheDocument();
   });
+
+  it('skips the exact-price request when the first quote is empty', async () => {
+    mockReceiveFor.mockResolvedValueOnce(undefined);
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.exactPrice)).toBe(false);
+  });
+
+  it('renders empty balances in the asset dropdown', async () => {
+    mockGetBalances.mockResolvedValue([]);
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('select-sourceAsset-ETH')).toBeInTheDocument();
+  });
 });
