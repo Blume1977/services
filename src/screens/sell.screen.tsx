@@ -378,11 +378,22 @@ export default function SellScreen(): JSX.Element {
       })
       .then((info) => {
         if (!isRunning || !info || generation !== quoteGeneration.current) return;
-        isExactPriceWriteRef.current = true;
         if (validatedData.sideToUpdate === Side.SPEND) {
-          setVal('amount', info.amount.toString());
+          const nextAmount = info.amount.toString();
+          if (enteredAmount !== nextAmount) {
+            isExactPriceWriteRef.current = true;
+            setVal('amount', nextAmount);
+          } else {
+            isExactPriceWriteRef.current = false;
+          }
         } else {
-          setVal('targetAmount', info.estimatedAmount.toString());
+          const nextTarget = info.estimatedAmount.toString();
+          if (selectedTargetAmount !== nextTarget) {
+            isExactPriceWriteRef.current = true;
+            setVal('targetAmount', nextTarget);
+          } else {
+            isExactPriceWriteRef.current = false;
+          }
         }
         setPaymentInfo(info);
       })

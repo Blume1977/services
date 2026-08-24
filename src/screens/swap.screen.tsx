@@ -367,7 +367,9 @@ export default function SwapScreen(): JSX.Element {
 
     const isSameTargetAmount = selectedTargetAmount === paymentInfo?.estimatedAmount?.toString();
     const requiresUpdate =
-      !isSameTargetAmount || selectedTargetAsset?.uniqueName !== paymentInfo?.targetAsset?.uniqueName;
+      !isSameTargetAmount ||
+      selectedTargetAsset?.uniqueName !== paymentInfo?.targetAsset?.uniqueName ||
+      selectedAddress?.address !== validatedData?.receiverAddress;
 
     const hasSpendData = enteredAmount && selectedSourceAsset;
     const hasGetData = selectedTargetAmount && selectedTargetAsset && selectedAddress;
@@ -393,7 +395,7 @@ export default function SwapScreen(): JSX.Element {
         updateData(Side.GET);
       }
     }
-  }, [selectedTargetAmount, selectedTargetAsset]);
+  }, [selectedTargetAmount, selectedTargetAsset, selectedAddress]);
 
   function updateData(sideToUpdate: Side) {
     const data = validateData({
@@ -430,11 +432,22 @@ export default function SwapScreen(): JSX.Element {
       })
       .then((info) => {
         if (!isRunning || !info || generation !== quoteGeneration.current) return;
-        isExactPriceWriteRef.current = true;
         if (validatedData.sideToUpdate === Side.SPEND) {
-          setVal('amount', info.amount.toString());
+          const nextAmount = info.amount.toString();
+          if (enteredAmount !== nextAmount) {
+            isExactPriceWriteRef.current = true;
+            setVal('amount', nextAmount);
+          } else {
+            isExactPriceWriteRef.current = false;
+          }
         } else {
-          setVal('targetAmount', info.estimatedAmount.toString());
+          const nextTarget = info.estimatedAmount.toString();
+          if (selectedTargetAmount !== nextTarget) {
+            isExactPriceWriteRef.current = true;
+            setVal('targetAmount', nextTarget);
+          } else {
+            isExactPriceWriteRef.current = false;
+          }
         }
         setPaymentInfo(info);
       })

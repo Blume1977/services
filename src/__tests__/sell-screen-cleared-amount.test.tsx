@@ -407,6 +407,18 @@ describe('SellScreen', () => {
     jest.useRealTimers();
   });
 
+  it('does not treat a no-op exact-price spend write as a user edit', async () => {
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '100' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+  });
+
   it('does not write exact-price into a spend field cleared while a spend-side quote is in flight', async () => {
     let resolveExact: (value: unknown) => void = () => undefined;
     let hangExact = false;

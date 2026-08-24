@@ -291,7 +291,6 @@ export default function BuyScreen(): JSX.Element {
   // Live-input generation: bumps immediately when form inputs or selector change so stale
   // debounced responses and confirm actions never commit against a newer form state (B4).
   const quoteGeneration = useRef(0);
-  const committedQuoteGeneration = useRef(0);
   const lastQuoteRequestSignature = useRef<string>();
   const pendingFormSynchronization = useRef<string>();
   const customerIdentityRef = useRef(customerIdentity);
@@ -723,8 +722,6 @@ export default function BuyScreen(): JSX.Element {
           identity: loadingCustomerIdentity,
           isFinalQuote: false,
         });
-        committedQuoteGeneration.current = generation;
-
         return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
@@ -764,7 +761,6 @@ export default function BuyScreen(): JSX.Element {
           identity: loadingCustomerIdentity,
           isFinalQuote: true,
         });
-        committedQuoteGeneration.current = generation;
       })
       .catch((error: ApiError) => {
         if (
