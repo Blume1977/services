@@ -445,19 +445,26 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('payment-info')).toHaveTextContent('299.98'));
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.004709');
 
-    // The user empties the field to retype: no cross-side recompute may refill it.
+    // The user empties the field to retype: no cross-side recompute may refill it — and no
+    // quote may fire at all for the emptied side (a fired quote would echo 299.98 back in).
+    const callsBeforeClear = mockReceiveFor.mock.calls.length;
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
     await settle(() => expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument());
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(mockReceiveFor.mock.calls.length).toBe(callsBeforeClear);
 
-    // Retyping works and the echo still only updates the target side.
+    // Retyping works: the quote is requested for exactly the typed amount and the echo still
+    // only updates the target side, so the purchase can be completed with the custom amount.
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
     });
     await settle(() => expect(screen.getByTestId('payment-info')).toHaveTextContent('149.98'));
     expect(screen.getByTestId('input-amount')).toHaveValue('150');
+    const retypedCalls = mockReceiveFor.mock.calls.slice(callsBeforeClear);
+    expect(retypedCalls.length).toBeGreaterThan(0);
+    expect(retypedCalls.every((call: any) => String(call[0].amount) === '150')).toBe(true);
   });
 
   it('keeps a cleared target amount field empty (mirrored protection)', async () => {
