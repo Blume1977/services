@@ -687,6 +687,8 @@ export default function SwapScreen(): JSX.Element {
                           customAmountError.interpolation,
                         )
                       }
+                      loading={isLoading === Side.SPEND}
+                      disabled={isLoading === Side.SPEND}
                       full
                     />
                   </div>

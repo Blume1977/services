@@ -392,9 +392,11 @@ describe('SwapScreen', () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
     });
     await flushQuote();
+    expect(screen.getByTestId('input-amount')).toBeDisabled();
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
+    expect(screen.getByTestId('input-amount')).not.toBeDisabled();
     await act(async () => {
       resolveExact(quoteFor({ targetAmount: 0.01, exactPrice: true }));
       await Promise.resolve();
