@@ -5,8 +5,9 @@
  * Browser drives the real frontend; Postgres proves writes where the UI mutates data.
  * UI flows that depend on pricing (`PUT /sell/paymentInfos`, `PUT /swap/paymentInfos`) are split
  * into two tests each — the deposit_route write and the payment panel — and both assert hard.
- * Neither is skipped: pricing does work here, once the URL leaves out the bank-account parameter
- * that sends the sell screen into an endless create-bank-account loop (its own test below).
+ * Neither is skipped: pricing does work here, once the URL leaves out the bank-account parameter.
+ * Passing `bank-account` used to recreate accounts in a loop; that regression is pinned by the
+ * dedicated test at the end of this file (select the existing account, do not POST again).
  * Factory-only tests (`createSell` / `createSwap`) remain as independent API-path proofs.
  */
 
@@ -215,10 +216,10 @@ async function setupSellFullUiFlow(
 
   // Pre-fill amount, asset and currency via URL params so the form is complete without fragile
   // dropdown clicks. The bank account is deliberately NOT passed as a parameter: the account
-  // created above is picked up on its own, and adding `bank-account` to this URL makes the screen
-  // create bank accounts in an endless loop and never price anything — see the dedicated test at
-  // the end of this file. Do not wait for 'networkidle' either: pricing effects keep the network
-  // busy on this screen, so content-based waits are what gate these tests.
+  // created above is picked up on its own. Passing `bank-account` is covered by the dedicated
+  // regression test at the end of this file (select existing, do not recreate). Do not wait for
+  // 'networkidle' either: pricing effects keep the network busy on this screen, so content-based
+  // waits are what gate these tests.
   await gotoWithSession(page, `/sell?asset-in=ETH&asset-out=CHF&amount-in=0.1`, user.jwt);
   expect(normPath(new URL(page.url()).pathname)).toBe('/sell');
 
@@ -896,7 +897,7 @@ test.describe('Sell + Swap e2e', () => {
     await expect(page.getByText('You spend', { exact: true })).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(20000);
 
-    expect(bankAccountPosts, 'an existing bank account must not be created again').toBeLessThanOrEqual(1);
+    expect(bankAccountPosts, 'an existing bank account must not be created again').toBe(0);
     expect(paymentInfos.last, 'the screen must get as far as requesting payment information').toBeTruthy();
   });
 });

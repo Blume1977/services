@@ -625,6 +625,7 @@ export default function SwapScreen(): JSX.Element {
 
   async function handleNext(paymentInfo: Swap): Promise<void> {
     setIsProcessing(true);
+    setErrorMessage(undefined);
 
     if (canSendTransaction() && !activeWallet) return close(paymentInfo, false);
 
@@ -634,6 +635,14 @@ export default function SwapScreen(): JSX.Element {
       }
 
       setTxDone(true);
+    } catch (error: any) {
+      if (error.code === 4001) return;
+      setErrorMessage(
+        translate(
+          'screens/swap',
+          'Transaction failed. Click Retry to see the deposit address for manual transfer.',
+        ),
+      );
     } finally {
       setIsProcessing(false);
     }

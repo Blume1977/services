@@ -780,6 +780,33 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('swap-completion')).toBeInTheDocument();
   });
 
+  it('swallows a wallet rejection (4001)', async () => {
+    mockCanSendTransaction.mockReturnValue(true);
+    mockActiveWallet = 'mm';
+    mockSendTransaction.mockRejectedValue({ code: 4001 });
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Complete transaction in your wallet' }).click();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
+  it('shows a retryable error for other send failures', async () => {
+    mockCanSendTransaction.mockReturnValue(true);
+    mockActiveWallet = 'mm';
+    mockSendTransaction.mockRejectedValue({ code: 500, message: 'nope' });
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Complete transaction in your wallet' }).click();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('error-hint')).toBeInTheDocument();
+  });
+
   it('marks a manual transfer complete without sending', async () => {
     mockCanSendTransaction.mockReturnValue(false);
     render(<SwapScreen />);
