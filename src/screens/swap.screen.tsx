@@ -150,6 +150,12 @@ export default function SwapScreen(): JSX.Element {
   const targetClearedByUserRef = useRef(false);
   const isExactPriceWriteRef = useRef(false);
   const quoteGeneration = useRef(0);
+  const enteredAmountLiveRef = useRef(enteredAmount);
+  const selectedTargetAmountLiveRef = useRef(selectedTargetAmount);
+  enteredAmountLiveRef.current = enteredAmount;
+  selectedTargetAmountLiveRef.current = selectedTargetAmount;
+  if (!enteredAmount && previousAmountRef.current) spendClearedByUserRef.current = true;
+  if (!selectedTargetAmount && previousTargetAmountRef.current) targetClearedByUserRef.current = true;
 
   useEffect(() => {
     if (sourceAssets && session?.address) {
@@ -436,10 +442,13 @@ export default function SwapScreen(): JSX.Element {
         return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
-        if (!isRunning || !info || generation !== quoteGeneration.current) return;
+        if (!isRunning || !info) return;
+        if (validatedData.sideToUpdate === Side.SPEND && spendClearedByUserRef.current) return;
+        if (validatedData.sideToUpdate === Side.GET && targetClearedByUserRef.current) return;
+        if (generation !== quoteGeneration.current) return;
         if (validatedData.sideToUpdate === Side.SPEND) {
           const nextAmount = info.amount.toString();
-          if (enteredAmount !== nextAmount) {
+          if (enteredAmountLiveRef.current !== nextAmount) {
             isExactPriceWriteRef.current = true;
             setVal('amount', nextAmount);
           } else {
@@ -447,7 +456,7 @@ export default function SwapScreen(): JSX.Element {
           }
         } else {
           const nextTarget = info.estimatedAmount.toString();
-          if (selectedTargetAmount !== nextTarget) {
+          if (selectedTargetAmountLiveRef.current !== nextTarget) {
             isExactPriceWriteRef.current = true;
             setVal('targetAmount', nextTarget);
           } else {

@@ -59,6 +59,7 @@ export const BankAccountSelector: React.FC<BankAccountSelectorProps> = ({
       setIsCreatingAccount(true);
       createAccount({ iban: bankAccount })
         .then((b) => onChange(b))
+        .catch(() => undefined)
         .finally(() => setIsCreatingAccount(false));
     }
   }, [bankAccount, getAccount, bankAccounts, allowedCountries, value, onChange, isCreatingAccount, createAccount]);

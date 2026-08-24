@@ -2,6 +2,7 @@ const mockCreateAccount = jest.fn();
 const mockGetAccount = jest.fn();
 const mockOnChange = jest.fn();
 const mockOnModalToggle = jest.fn();
+const mockValidateIban = jest.fn(() => true as boolean | string);
 
 const existing = { id: 1, iban: 'CH9300762011623852957', label: 'Main', default: true };
 let mockBankAccounts: typeof existing[] | undefined = [existing];
@@ -9,7 +10,7 @@ let mockBankAccountParam: string | undefined;
 
 jest.mock('@dfx.swiss/react', () => ({
   Utils: { formatIban: () => undefined },
-  Validations: { Iban: () => ({ validate: () => true }) },
+  Validations: { Iban: () => ({ validate: (...args: unknown[]) => mockValidateIban(...args) }) },
   useBankAccountContext: () => ({
     bankAccounts: mockBankAccounts,
     createAccount: (...args: unknown[]) => mockCreateAccount(...args),
@@ -81,6 +82,7 @@ describe('BankAccountSelector', () => {
       iban ? list.find((a) => a.iban === iban) : undefined,
     );
     mockCreateAccount.mockResolvedValue({ id: 2, iban: 'DE89370400440532013000' });
+    mockValidateIban.mockReturnValue(true);
   });
 
   it('does nothing while bank accounts have not loaded', () => {
@@ -176,6 +178,42 @@ describe('BankAccountSelector', () => {
     });
     expect(mockCreateAccount).toHaveBeenCalledTimes(1);
     expect(mockCreateAccount).toHaveBeenCalledWith({ iban: 'DE89370400440532013000' });
+    expect(mockOnChange).toHaveBeenCalledWith({ id: 2, iban: 'DE89370400440532013000' });
+  });
+
+  it('does not create an account when the param IBAN is invalid', () => {
+    mockBankAccountParam = 'not-an-iban';
+    mockGetAccount.mockReturnValue(undefined);
+    mockValidateIban.mockReturnValue('Invalid IBAN');
+    render(
+      <BankAccountSelector
+        placeholder="IBAN"
+        isModalOpen={false}
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    expect(mockCreateAccount).not.toHaveBeenCalled();
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('clears the in-flight create guard when createAccount rejects', async () => {
+    mockBankAccountParam = 'DE89370400440532013000';
+    mockGetAccount.mockReturnValue(undefined);
+    mockCreateAccount.mockRejectedValue(new Error('duplicate'));
+    render(
+      <BankAccountSelector
+        placeholder="IBAN"
+        isModalOpen={false}
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockCreateAccount).toHaveBeenCalledTimes(1);
+    expect(mockOnChange).not.toHaveBeenCalled();
   });
 
   it('picks an account from the modal and accepts AddBankAccount', () => {

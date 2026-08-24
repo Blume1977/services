@@ -157,6 +157,12 @@ export default function SellScreen(): JSX.Element {
   const targetClearedByUserRef = useRef(false);
   const isExactPriceWriteRef = useRef(false);
   const quoteGeneration = useRef(0);
+  const enteredAmountLiveRef = useRef(enteredAmount);
+  const selectedTargetAmountLiveRef = useRef(selectedTargetAmount);
+  enteredAmountLiveRef.current = enteredAmount;
+  selectedTargetAmountLiveRef.current = selectedTargetAmount;
+  if (!enteredAmount && previousAmountRef.current) spendClearedByUserRef.current = true;
+  if (!selectedTargetAmount && previousTargetAmountRef.current) targetClearedByUserRef.current = true;
 
   const availableBalance = selectedAsset && findBalance(selectedAsset);
 
@@ -245,9 +251,10 @@ export default function SellScreen(): JSX.Element {
   }, [selectedAddress]);
 
   useEffect(() => {
-    if (selectedBankAccount && selectedBankAccount.preferredCurrency)
-      setVal('currency', selectedBankAccount.preferredCurrency);
-  }, [selectedBankAccount]);
+    if (!selectedBankAccount?.preferredCurrency) return;
+    const currency = getCurrency(sellableCurrencies, selectedBankAccount.preferredCurrency.name);
+    if (currency) setVal('currency', currency);
+  }, [selectedBankAccount, sellableCurrencies, getCurrency]);
 
   useEffect(() => {
     if (!enteredAmount) {
@@ -383,10 +390,13 @@ export default function SellScreen(): JSX.Element {
         return receiveFor({ ...data, exactPrice: true });
       })
       .then((info) => {
-        if (!isRunning || !info || generation !== quoteGeneration.current) return;
+        if (!isRunning || !info) return;
+        if (validatedData.sideToUpdate === Side.SPEND && spendClearedByUserRef.current) return;
+        if (validatedData.sideToUpdate === Side.GET && targetClearedByUserRef.current) return;
+        if (generation !== quoteGeneration.current) return;
         if (validatedData.sideToUpdate === Side.SPEND) {
           const nextAmount = info.amount.toString();
-          if (enteredAmount !== nextAmount) {
+          if (enteredAmountLiveRef.current !== nextAmount) {
             isExactPriceWriteRef.current = true;
             setVal('amount', nextAmount);
           } else {
@@ -394,7 +404,7 @@ export default function SellScreen(): JSX.Element {
           }
         } else {
           const nextTarget = info.estimatedAmount.toString();
-          if (selectedTargetAmount !== nextTarget) {
+          if (selectedTargetAmountLiveRef.current !== nextTarget) {
             isExactPriceWriteRef.current = true;
             setVal('targetAmount', nextTarget);
           } else {
