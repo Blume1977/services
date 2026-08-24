@@ -747,6 +747,17 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.getByTestId('quote-error')).toHaveTextContent('KycRequired'));
   });
 
+  it.each(['LimitExceeded', 'EmailRequired', 'BankTransactionMissing', 'BankTransactionOrVideoMissing'])(
+    'routes %s quote errors through QuoteErrorHint',
+    async (error) => {
+      mockPersonalIban.mockReturnValue(undefined);
+      mockUseAppParams.mockReturnValue(baseAppParams());
+      mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error }));
+      render(<BuyScreen />);
+      await settle(() => expect(screen.getByTestId('quote-error')).toHaveTextContent(error));
+    },
+  );
+
   it('shows a generic error and retries', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());
@@ -792,6 +803,14 @@ describe('BuyScreen cleared amount protection', () => {
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), rate: 1 }));
     render(<BuyScreen />);
     await settle(() => expect(screen.getByText('You get')).toBeInTheDocument());
+  });
+
+  it('uses You get about when the rate is not 1', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), rate: 0.9 }));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByText('You get about')).toBeInTheDocument());
   });
 
   it('confirms a final quote', async () => {

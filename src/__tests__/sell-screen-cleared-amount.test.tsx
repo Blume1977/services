@@ -487,6 +487,16 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('quote-error')).toHaveTextContent('KycRequired');
   });
 
+  it.each(['LimitExceeded', 'EmailRequired', 'BankTransactionMissing', 'BankTransactionOrVideoMissing'])(
+    'routes %s quote errors through QuoteErrorHint',
+    async (error) => {
+      mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error }));
+      render(<SellScreen />);
+      await flushQuote();
+      expect(screen.getByTestId('quote-error')).toHaveTextContent(error);
+    },
+  );
+
   it('shows a balance error when the quote exceeds the wallet balance', async () => {
     mockGetBalances.mockResolvedValue([{ asset: eth, amount: 0.01 }]);
     render(<SellScreen />);

@@ -346,16 +346,6 @@ export default function BuyScreen(): JSX.Element {
       : [];
   const availablePaymentMethods = [FiatPaymentMethod.BANK];
 
-  // no instant payments ATM
-  // (!selectedAsset || selectedAsset.instantBuyable) && availablePaymentMethods.push(FiatPaymentMethod.INSTANT);
-
-  // Credit card payments disabled
-  // (isDfxHosted || !isEmbedded) &&
-  //   wallet !== EmbeddedWallet &&
-  //   user?.activeAddress?.wallet !== EmbeddedWallet &&
-  //   (!selectedAsset || selectedAsset?.cardBuyable) &&
-  //   availablePaymentMethods.push(FiatPaymentMethod.CARD);
-
   const availableCurrencies = currencies?.filter((c) => c.sellable);
 
   useEffect(() => {

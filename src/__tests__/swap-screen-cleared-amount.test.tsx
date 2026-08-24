@@ -681,4 +681,20 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
   });
+
+  it('falls back to the target side after spend is cleared and the source asset changes', async () => {
+    render(<SwapScreen />);
+    await flushQuote();
+    const targetBefore = (screen.getByTestId('input-targetAmount') as HTMLInputElement).value;
+    expect(targetBefore).not.toBe('');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    await act(async () => {
+      screen.getByTestId('select-sourceAsset-BTC').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('select-sourceAsset-BTC')).toBeInTheDocument();
+  });
 });
