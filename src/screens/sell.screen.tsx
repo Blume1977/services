@@ -154,6 +154,7 @@ export default function SellScreen(): JSX.Element {
   const previousTargetAmountRef = useRef<string>();
   const spendClearedByUserRef = useRef(false);
   const targetClearedByUserRef = useRef(false);
+  const isExactPriceWriteRef = useRef(false);
 
   const availableBalance = selectedAsset && findBalance(selectedAsset);
 
@@ -255,12 +256,16 @@ export default function SellScreen(): JSX.Element {
   // A field the user emptied stays an edit in progress until they type again.
   // SPEND data changed
   useEffect(() => {
+    const exactPriceWrite = isExactPriceWriteRef.current;
     if (enteredAmount) {
       spendClearedByUserRef.current = false;
-      if (!previousAmountRef.current) targetClearedByUserRef.current = false;
+      if (enteredAmount !== previousAmountRef.current && !exactPriceWrite) {
+        targetClearedByUserRef.current = false;
+      }
     } else if (previousAmountRef.current) {
       spendClearedByUserRef.current = true;
     }
+    if (enteredAmount !== previousAmountRef.current) isExactPriceWriteRef.current = false;
     previousAmountRef.current = enteredAmount;
 
     const requiresUpdate =
@@ -282,12 +287,16 @@ export default function SellScreen(): JSX.Element {
 
   // GET data changed
   useEffect(() => {
+    const exactPriceWrite = isExactPriceWriteRef.current;
     if (selectedTargetAmount) {
       targetClearedByUserRef.current = false;
-      if (!previousTargetAmountRef.current) spendClearedByUserRef.current = false;
+      if (selectedTargetAmount !== previousTargetAmountRef.current && !exactPriceWrite) {
+        spendClearedByUserRef.current = false;
+      }
     } else if (previousTargetAmountRef.current) {
       targetClearedByUserRef.current = true;
     }
+    if (selectedTargetAmount !== previousTargetAmountRef.current) isExactPriceWriteRef.current = false;
     previousTargetAmountRef.current = selectedTargetAmount;
 
     const requiresUpdate =
@@ -299,12 +308,12 @@ export default function SellScreen(): JSX.Element {
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
     if (requiresUpdate) {
-      if (hasGetData) {
+      if (hasGetData && !spendClearedByUserRef.current) {
         updateData(Side.SPEND);
-      } else if (hasSpendData && !targetClearedByUserRef.current) {
-        updateData(Side.GET);
       } else if (targetClearedByUserRef.current || spendClearedByUserRef.current) {
         setValidatedData(undefined);
+      } else if (hasSpendData) {
+        updateData(Side.GET);
       }
     }
   }, [selectedTargetAmount, selectedCurrency, selectedBankAccount]);
@@ -348,8 +357,12 @@ export default function SellScreen(): JSX.Element {
       .then((info) => {
         if (isRunning && info) {
           if (validatedData.sideToUpdate === Side.SPEND) {
-            if (!spendClearedByUserRef.current) setVal('amount', info.amount.toString());
+            if (!spendClearedByUserRef.current) {
+              isExactPriceWriteRef.current = true;
+              setVal('amount', info.amount.toString());
+            }
           } else if (!targetClearedByUserRef.current) {
+            isExactPriceWriteRef.current = true;
             setVal('targetAmount', info.estimatedAmount.toString());
           }
           setPaymentInfo(info);
