@@ -481,4 +481,52 @@ describe('BuyScreen cleared amount protection', () => {
     await settle(() => expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument());
     expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
   });
+
+  it('accepts a retyped target amount without clobbering the spend field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.004709'));
+
+    const callsBeforeClear = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    // Typed side stays; exact-price may write the computed spend side.
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.01');
+    const retyped = mockReceiveFor.mock.calls.slice(callsBeforeClear);
+    expect(retyped.length).toBeGreaterThan(0);
+    expect(retyped.every((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
+  });
+
+  it('still quotes from a never-set spend field via amountOut (deep-link fallback)', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: undefined, amountOut: '0.01' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.01'));
+    await settle(() => expect(mockReceiveFor).toHaveBeenCalled());
+    expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
+  });
+
+  it('uses amountIn instead of the default 300', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: '100' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('100'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(mockReceiveFor.mock.calls.every((call: any) => String(call[0].amount) === '100')).toBe(true);
+  });
 });
