@@ -552,6 +552,26 @@ test.describe('Sell + Swap e2e', () => {
     }
   });
 
+  test('/sell: clearing the spend amount keeps the field empty (no cross-side refill)', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSellFullUiFlow(page, 'sell-clear-spend');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+
+    const spend = page.locator('h2', { hasText: 'You spend' }).locator('..').locator('input[type="number"]').first();
+    await expect(spend).toHaveValue('0.1');
+    await spend.click();
+    await spend.fill('');
+    await spend.blur();
+
+    await expect
+      .poll(async () => spend.inputValue(), {
+        timeout: 8000,
+        message: 'cleared sell spend amount must stay empty',
+      })
+      .toBe('');
+  });
+
   // ---------------------------------------------------------------------------
   // /sell/info
   // ---------------------------------------------------------------------------
@@ -771,6 +791,26 @@ test.describe('Sell + Swap e2e', () => {
         page.getByText('Nice! You are all set! Give us a minute to handle your transaction.'),
       ).toBeVisible({ timeout: 15000 });
     }
+  });
+
+  test('/swap: clearing the spend amount keeps the field empty (no cross-side refill)', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSwapFullUiFlow(page, 'swap-clear-spend');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+
+    const spend = page.locator('h2', { hasText: 'You spend' }).locator('..').locator('input[type="number"]').first();
+    await expect(spend).toHaveValue('0.1');
+    await spend.click();
+    await spend.fill('');
+    await spend.blur();
+
+    await expect
+      .poll(async () => spend.inputValue(), {
+        timeout: 8000,
+        message: 'cleared swap spend amount must stay empty',
+      })
+      .toBe('');
   });
 
   // Sanity: incomplete personal data is redirected off /sell by the API/UI (Ident data incomplete).

@@ -44,7 +44,6 @@ import { PaymentInformationContent } from 'src/components/payment/payment-info-b
 import { useWindowContext } from 'src/contexts/window.context';
 import { getKycErrorFromMessage } from 'src/util/api-error';
 import { blankedAddress } from 'src/util/utils';
-import { NameEdit } from '../components/edit/name.edit';
 import { ErrorHint } from '../components/error-hint';
 import { ExchangeRate } from '../components/exchange-rate';
 import { AddressSwitch } from '../components/payment/address-switch';
@@ -209,9 +208,7 @@ export default function BuyScreen(): JSX.Element {
     identity: number | undefined;
   }>();
   const [showsSwitchScreen, setShowsSwitchScreen] = useState(false);
-  const [showsNameForm, setShowsNameForm] = useState(false);
   const [isLoading, setIsLoading] = useState<Side>();
-  const [isContinue, setIsContinue] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [validatedData, setValidatedData] = useState<ValidatedData>();
   // Re-run the guarded quote effect when Retry is clicked even if the canonical request is equal.
@@ -359,13 +356,7 @@ export default function BuyScreen(): JSX.Element {
   //   (!selectedAsset || selectedAsset?.cardBuyable) &&
   //   availablePaymentMethods.push(FiatPaymentMethod.CARD);
 
-  const availableCurrencies = currencies?.filter((c) =>
-    selectedPaymentMethod === FiatPaymentMethod.CARD
-      ? c.cardSellable
-      : selectedPaymentMethod === FiatPaymentMethod.INSTANT
-      ? c.instantSellable
-      : c.sellable,
-  );
+  const availableCurrencies = currencies?.filter((c) => c.sellable);
 
   useEffect(() => {
     const activeBlockchain = walletBlockchain ?? blockchain;
@@ -532,13 +523,6 @@ export default function BuyScreen(): JSX.Element {
 
     data && setValidatedData({ ...data, sideToUpdate });
   }
-
-  // name edited
-  useEffect(() => {
-    if (showsNameForm && paymentInfo?.isValid) {
-      openPaymentLink();
-    }
-  }, [showsNameForm, paymentInfo?.isValid]);
 
   const hasCompleteSpendSide = Boolean(selectedAmount && selectedCurrency && selectedPaymentMethod);
   const hasCompleteGetSide = Boolean(selectedTargetAmount && selectedAsset);
@@ -1032,21 +1016,6 @@ export default function BuyScreen(): JSX.Element {
       });
   }
 
-  function onCardBuy(info: Buy) {
-    if (info.error === TransactionError.NAME_REQUIRED) {
-      setShowsNameForm(true);
-    } else {
-      openPaymentLink();
-    }
-  }
-
-  function openPaymentLink() {
-    if (!paymentInfo?.paymentLink) return;
-
-    setIsContinue(true);
-    window.location.href = paymentInfo.paymentLink;
-  }
-
   function onCreatePersonalIban() {
     if (!selectedCurrency) return;
     navigate({ pathname: '/buy/personal-iban', search: `?currency=${selectedCurrency.name}` }, { setRedirect: true });
@@ -1085,7 +1054,6 @@ export default function BuyScreen(): JSX.Element {
   useLayoutOptions({
     title,
     backButton: !showsActiveCompletion,
-    onBack: showsNameForm ? () => setShowsNameForm(false) : undefined,
     textStart: true,
   });
 
@@ -1142,8 +1110,6 @@ export default function BuyScreen(): JSX.Element {
           paymentInfo={activeCompletedPaymentInfo}
           navigateOnClose
         />
-      ) : showsNameForm ? (
-        <NameEdit onSuccess={() => updateData(Side.GET)} />
       ) : (
         <Form control={control} rules={rules} errors={{}} onSubmit={handleSubmit(onSubmit)} translate={translateError}>
           <StyledVerticalStack gap={8} full center>
@@ -1311,110 +1277,84 @@ export default function BuyScreen(): JSX.Element {
                             type={TransactionType.BUY}
                           />
 
-                          {selectedPaymentMethod !== FiatPaymentMethod.CARD ? (
-                            <>
-                              <div>
-                                <PaymentInformationContent
-                                  info={paymentInfo}
-                                  showBank={showBank}
-                                  personalIbanProviderSwitch={
-                                    switchTarget === undefined
-                                      ? undefined
-                                      : {
-                                          target: switchTarget,
-                                          onSwitch: onSwitchPersonalIbanProvider,
-                                        }
-                                  }
-                                />
-                              </div>
-                              <SanctionHint />
-                              {activeFrickKycFallbackHint && (
+                          <div>
+                            <PaymentInformationContent
+                              info={paymentInfo}
+                              showBank={showBank}
+                              personalIbanProviderSwitch={
+                                switchTarget === undefined
+                                  ? undefined
+                                  : {
+                                      target: switchTarget,
+                                      onSwitch: onSwitchPersonalIbanProvider,
+                                    }
+                              }
+                            />
+                          </div>
+                          <SanctionHint />
+                          {activeFrickKycFallbackHint && (
+                            <StyledInfoText iconColor={IconColor.BLUE}>
+                              {translate(
+                                'screens/payment',
+                                'Your new Bank Frick IBAN requires KYC level 50 - we are showing your existing IBAN instead.',
+                              )}
+                            </StyledInfoText>
+                          )}
+                          {effectivePersonalIban !== undefined &&
+                            paymentInfoPaymentMethod !== undefined &&
+                            !isPersonalIbanApplicable(
+                              paymentInfo.currency.name,
+                              paymentInfoPaymentMethod,
+                            ) && (
+                              <StyledInfoText iconColor={IconColor.BLUE}>
+                                {translate(
+                                  'screens/payment',
+                                  'Your requested personal IBAN is only available for EUR and CHF bank transfers, so it was not used for this offer.',
+                                )}
+                              </StyledInfoText>
+                            )}
+                          {!paymentInfo.isPersonalIban &&
+                            (selectedCurrency?.name === undefined ||
+                              !FRICK_CURRENCIES.includes(selectedCurrency.name)) &&
+                            effectivePersonalIban === undefined && (
+                              <StyledVerticalStack gap={4}>
+                                <h2 className="text-dfxBlue-800 text-center">
+                                  {translate('screens/payment', 'New: Personal IBAN in your own name!')}
+                                </h2>
                                 <StyledInfoText iconColor={IconColor.BLUE}>
                                   {translate(
                                     'screens/payment',
-                                    'Your new Bank Frick IBAN requires KYC level 50 - we are showing your existing IBAN instead.',
+                                    'Personal IBANs are in your own name, which means you make the transfer to yourself instead of DFX AG. Such transactions are often processed faster and more reliably by banks.',
                                   )}
                                 </StyledInfoText>
+                                <StyledButton
+                                  width={StyledButtonWidth.FULL}
+                                  label={translate('screens/payment', 'Generate personal IBAN')}
+                                  onClick={onCreatePersonalIban}
+                                  color={StyledButtonColor.STURDY_WHITE}
+                                />
+                              </StyledVerticalStack>
+                            )}
+                          <div className="w-full leading-none">
+                            <StyledLink
+                              label={translate(
+                                'screens/payment',
+                                'Please note that by using this service you automatically accept our terms and conditions. The effective exchange rate is fixed when the money is received and processed by DFX.',
                               )}
-                              {effectivePersonalIban !== undefined &&
-                                paymentInfoPaymentMethod !== undefined &&
-                                !isPersonalIbanApplicable(
-                                  paymentInfo.currency.name,
-                                  paymentInfoPaymentMethod,
-                                ) && (
-                                  <StyledInfoText iconColor={IconColor.BLUE}>
-                                    {translate(
-                                      'screens/payment',
-                                      'Your requested personal IBAN is only available for EUR and CHF bank transfers, so it was not used for this offer.',
-                                    )}
-                                  </StyledInfoText>
-                                )}
-                              {!paymentInfo.isPersonalIban &&
-                                (selectedCurrency?.name === undefined ||
-                                  !FRICK_CURRENCIES.includes(selectedCurrency.name)) &&
-                                effectivePersonalIban === undefined && (
-                                  <StyledVerticalStack gap={4}>
-                                    <h2 className="text-dfxBlue-800 text-center">
-                                      {translate('screens/payment', 'New: Personal IBAN in your own name!')}
-                                    </h2>
-                                    <StyledInfoText iconColor={IconColor.BLUE}>
-                                      {translate(
-                                        'screens/payment',
-                                        'Personal IBANs are in your own name, which means you make the transfer to yourself instead of DFX AG. Such transactions are often processed faster and more reliably by banks.',
-                                      )}
-                                    </StyledInfoText>
-                                    <StyledButton
-                                      width={StyledButtonWidth.FULL}
-                                      label={translate('screens/payment', 'Generate personal IBAN')}
-                                      onClick={onCreatePersonalIban}
-                                      color={StyledButtonColor.STURDY_WHITE}
-                                    />
-                                  </StyledVerticalStack>
-                                )}
-                              <div className="w-full leading-none">
-                                <StyledLink
-                                  label={translate(
-                                    'screens/payment',
-                                    'Please note that by using this service you automatically accept our terms and conditions. The effective exchange rate is fixed when the money is received and processed by DFX.',
-                                  )}
-                                  url={Urls.termsAndConditions}
-                                  small
-                                  dark
-                                />
-                                <StyledButton
-                                  width={StyledButtonWidth.FULL}
-                                  label={translate('screens/buy', 'Click here once you have issued the transfer')}
-                                  onClick={() => confirm(paymentInfo.id)}
-                                  disabled={!isQuoteFinal}
-                                  isLoading={isConfirming}
-                                  caps={false}
-                                  className="mt-4"
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <SanctionHint />
-                              <div className="leading-none">
-                                <StyledLink
-                                  label={translate(
-                                    'screens/payment',
-                                    'Please note that by using this service you automatically accept our terms and conditions and authorize DFX.swiss to collect the above amount via your chosen payment method and agree that this amount cannot be canceled, recalled or refunded.',
-                                  )}
-                                  url={Urls.termsAndConditions}
-                                  small
-                                  dark
-                                />
-                                <StyledButton
-                                  width={StyledButtonWidth.FULL}
-                                  label={translate('general/actions', 'Next')}
-                                  onClick={() => onCardBuy(paymentInfo)}
-                                  isLoading={isContinue}
-                                  className="mt-4"
-                                />
-                              </div>
-                            </>
-                          )}
+                              url={Urls.termsAndConditions}
+                              small
+                              dark
+                            />
+                            <StyledButton
+                              width={StyledButtonWidth.FULL}
+                              label={translate('screens/buy', 'Click here once you have issued the transfer')}
+                              onClick={() => confirm(paymentInfo.id)}
+                              disabled={!isQuoteFinal}
+                              isLoading={isConfirming}
+                              caps={false}
+                              className="mt-4"
+                            />
+                          </div>
                         </>
                       ))}
                   </>

@@ -9,17 +9,25 @@ const mockConfirmFor = jest.fn();
 const mockUseAppParams = jest.fn();
 const mockPersonalIban = jest.fn();
 const mockSetParams = jest.fn();
+const mockLogout = jest.fn();
+const mockNavigate = jest.fn();
+const mockSwitchBlockchain = jest.fn();
 const mockEmptyPersonalIbans: never[] = [];
+const mockTranslate = (_ns: string, key: string) => key;
+const mockTranslateError = (key: string) => key;
+let mockSession: { address: string } | undefined;
 
 const mockAssets = [
   { name: 'BTC', uniqueName: 'Bitcoin', category: 'Public', blockchain: 'Ethereum', description: 'Bitcoin' },
   { name: 'ETH', uniqueName: 'Ethereum/ETH', category: 'Public', blockchain: 'Ethereum', description: 'Ethereum' },
+  { name: 'USDT', uniqueName: 'Ethereum/USDT', category: 'Private', blockchain: 'Ethereum', description: 'Tether' },
+  { name: 'WBTC', uniqueName: 'Bitcoin/WBTC', category: 'Public', blockchain: 'Bitcoin', description: 'Wrapped' },
 ];
 const mockAssetsMap = new Map([['Ethereum', mockAssets]]);
 const mockGetAssets = () => mockAssets;
 const mockGetAsset = (list: any[], name: string) =>
   (list ?? []).find((a: any) => a.name === name) ?? list?.[0];
-const mockIsSameAsset = () => false;
+const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockGetCurrency = (list: any[], name: string) => (list ?? []).find((c: any) => c.name === name);
 const mockGetDefaultCurrency = (list: any[]) => list?.[0];
 const mockCurrencies = [
@@ -71,7 +79,7 @@ jest.mock('@dfx.swiss/react', () => {
       assets: mockAssetsMap,
       getAssets: mockGetAssets,
     }),
-    useAuthContext: () => ({ session: undefined }),
+    useAuthContext: () => ({ session: mockSession }),
     useBuy: () => buyInterface,
     useFiat: () => ({
       toSymbol: () => '',
@@ -79,7 +87,7 @@ jest.mock('@dfx.swiss/react', () => {
       getCurrency: mockGetCurrency,
       getDefaultCurrency: mockGetDefaultCurrency,
     }),
-    useSessionContext: () => ({ logout: jest.fn() }),
+    useSessionContext: () => ({ logout: mockLogout }),
     useUserContext: () => ({ user: { kyc: { level: 0 }, accountId: 1 }, isUserLoading: false }),
   };
 });
@@ -108,7 +116,18 @@ jest.mock('@dfx.swiss/react-components', () => {
 
   return {
     AssetIconVariant: {},
-    Form: ({ children, control }: any) => <div>{enrich(children, control)}</div>,
+    Form: ({ children, control, onSubmit }: any) => (
+      <div>
+        {enrich(children, control)}
+        <button
+          type="button"
+          data-testid="form-submit"
+          onClick={() => onSubmit?.({ preventDefault() { return undefined; } })}
+        >
+          submit
+        </button>
+      </div>
+    ),
     IconColor: { BLUE: 'blue' },
     SpinnerSize: { SM: 'sm', LG: 'lg' },
     StyledButton: ({ label, onClick }: any) => (
@@ -118,20 +137,21 @@ jest.mock('@dfx.swiss/react-components', () => {
     ),
     StyledButtonColor: { STURDY_WHITE: 'sturdy-white' },
     StyledButtonWidth: { MIN: 'min', FULL: 'full' },
-    StyledDropdown: ({ name, items, labelFunc, control }: any) => (
+    StyledDropdown: ({ name, items, labelFunc, descriptionFunc, control }: any) => (
       <Controller
         name={name}
         control={control}
         render={({ field }: any) => (
           <div data-testid={`dropdown-${name}`}>
-            {(items ?? []).map((item: any) => (
+            {(items ?? []).map((item: any, index: number) => (
               <button
-                key={labelFunc(item)}
+                key={`${labelFunc(item)}-${index}`}
                 type="button"
-                data-testid={`select-${name}-${labelFunc(item)}`}
+                data-testid={`select-${name}-${labelFunc(item) || index}`}
                 onClick={() => field.onChange(item)}
               >
                 {labelFunc(item)}
+                {descriptionFunc?.(item)}
               </button>
             ))}
           </div>
@@ -141,28 +161,35 @@ jest.mock('@dfx.swiss/react-components', () => {
     StyledHorizontalStack: ({ children }: any) => <div>{children}</div>,
     StyledInfoText: ({ children }: any) => <div>{children}</div>,
     // Interactive so the clear/retype protection can drive the amount fields like a user would.
-    StyledInput: ({ name, control }: any) =>
+    StyledInput: ({ name, control, forceErrorMessage }: any) =>
       name ? (
         <Controller
           name={name}
           control={control}
           render={({ field }: any) => (
-            <input
-              data-testid={`input-${name}`}
-              value={field.value ?? ''}
-              onChange={(e: any) => field.onChange(e.target.value)}
-            />
+            <>
+              <input
+                data-testid={`input-${name}`}
+                value={field.value ?? ''}
+                onChange={(e: any) => field.onChange(e.target.value)}
+              />
+              {forceErrorMessage && <div data-testid={`input-${name}-error`}>{forceErrorMessage}</div>}
+            </>
           )}
         />
       ) : null,
     StyledLink: ({ children, label }: any) => <div>{label ?? children}</div>,
     StyledLoadingSpinner: () => null,
-    StyledSearchDropdown: ({ name, items, labelFunc, control }: any) => (
+    StyledSearchDropdown: ({ name, items, labelFunc, control, filterFunc, descriptionFunc, assetIconFunc }: any) => (
       <Controller
         name={name}
         control={control}
         render={({ field }: any) => (
           <div data-testid={`dropdown-${name}`}>
+            {items?.[0] && filterFunc?.(items[0], undefined)}
+            {items?.[0] && filterFunc?.(items[0], 'btc')}
+            {items?.[0] && descriptionFunc?.(items[0])}
+            {items?.[0] && assetIconFunc?.(items[0])}
             {(items ?? []).map((item: any) => (
               <button
                 key={labelFunc(item)}
@@ -184,13 +211,29 @@ jest.mock('@dfx.swiss/react-components', () => {
 jest.mock('src/components/payment/payment-info-buy', () => ({
   PaymentInformationContent: ({ info }: any) => <div data-testid="payment-info">{info.amount}</div>,
 }));
-jest.mock('../components/edit/name.edit', () => ({ NameEdit: () => null }));
-jest.mock('../components/error-hint', () => ({ ErrorHint: ({ message }: any) => <div>{message}</div> }));
-jest.mock('../components/exchange-rate', () => ({ ExchangeRate: () => null }));
-jest.mock('../components/payment/address-switch', () => ({ AddressSwitch: () => null }));
-jest.mock('../components/payment/buy-completion', () => ({ BuyCompletion: () => null }));
-jest.mock('../components/private-asset-hint', () => ({ PrivateAssetHint: () => null }));
-jest.mock('../components/quote-error-hint', () => ({ QuoteErrorHint: () => null }));
+jest.mock('../components/error-hint', () => ({ ErrorHint: ({ message }: any) => <div data-testid="error-hint">{message}</div> }));
+jest.mock('../components/exchange-rate', () => ({ ExchangeRate: () => <div data-testid="exchange-rate" /> }));
+jest.mock('../components/payment/address-switch', () => ({
+  AddressSwitch: ({ onClose }: any) => (
+    <div data-testid="address-switch">
+      <button type="button" data-testid="address-switch-confirm" onClick={() => onClose(true)}>
+        confirm
+      </button>
+      <button type="button" data-testid="address-switch-cancel" onClick={() => onClose(false)}>
+        cancel
+      </button>
+    </div>
+  ),
+}));
+jest.mock('../components/payment/buy-completion', () => ({
+  BuyCompletion: () => <div data-testid="buy-completion" />,
+}));
+jest.mock('../components/private-asset-hint', () => ({
+  PrivateAssetHint: () => <div data-testid="private-asset-hint" />,
+}));
+jest.mock('../components/quote-error-hint', () => ({
+  QuoteErrorHint: ({ error }: any) => <div data-testid="quote-error">{error}</div>,
+}));
 jest.mock('../components/sanction-hint', () => ({ SanctionHint: () => null }));
 
 // labels.ts pulls many runtime enums from @dfx.swiss/react at module load; mock the only
@@ -208,13 +251,17 @@ jest.mock('../contexts/layout.context', () => ({
 // prefCurrency must be truthy: currency effect only calls setVal when prefCurrency && currency.
 jest.mock('../contexts/settings.context', () => ({
   useSettingsContext: () => ({
-    translate: (_ns: string, key: string) => key,
-    translateError: (key: string) => key,
+    translate: mockTranslate,
+    translateError: mockTranslateError,
     currency: mockPrefCurrency,
   }),
 }));
 jest.mock('../contexts/wallet.context', () => ({
-  useWalletContext: () => ({ blockchain: undefined, isInitialized: true, switchBlockchain: jest.fn() }),
+  useWalletContext: () => ({
+    blockchain: undefined,
+    isInitialized: true,
+    switchBlockchain: mockSwitchBlockchain,
+  }),
 }));
 jest.mock('src/contexts/window.context', () => ({
   useWindowContext: () => ({ width: 800 }),
@@ -260,7 +307,7 @@ jest.mock('../hooks/layout-config.hook', () => ({
   useLayoutOptions: () => undefined,
 }));
 jest.mock('../hooks/navigation.hook', () => ({
-  useNavigation: () => ({ navigate: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -287,6 +334,7 @@ function baseAppParams(overrides: Record<string, unknown> = {}) {
 describe('BuyScreen quote race protection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSession = undefined;
   });
 
   async function waitFor(callback: () => unknown) {
@@ -421,6 +469,7 @@ describe('BuyScreen quote race protection', () => {
 describe('BuyScreen cleared amount protection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSession = undefined;
   });
 
   async function settle(callback: () => unknown) {
@@ -668,5 +717,203 @@ describe('BuyScreen cleared amount protection', () => {
     const typed = mockReceiveFor.mock.calls.slice(callsBeforeType);
     expect(typed.length).toBeGreaterThan(0);
     expect(typed.every((call: any) => String(call[0].amount) === '150')).toBe(true);
+  });
+
+  it('shows amount-too-low from the quote error field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({ ...quoteFor(req), error: 'AmountTooLow', minVolume: 1 }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount-error')).toBeInTheDocument());
+  });
+
+  it('shows amount-too-high from the quote error field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) =>
+      Promise.resolve({ ...quoteFor(req), error: 'AmountTooHigh', maxVolume: 1 }),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount-error')).toBeInTheDocument());
+  });
+
+  it('routes KYC quote errors through QuoteErrorHint', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('quote-error')).toHaveTextContent('KycRequired'));
+  });
+
+  it('shows a generic error and retries', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValueOnce({ statusCode: 500, message: 'boom' }).mockImplementation((req: any) =>
+      Promise.resolve(quoteFor(req)),
+    );
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('boom'));
+    await act(async () => {
+      screen.getByRole('button', { name: 'Retry' }).click();
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+  });
+
+  it('uses Unknown error when the API omits a message', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockRejectedValue({ statusCode: 500 });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('Unknown error'));
+  });
+
+  it('filters assets when an asset filter is set', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assets: 'BTC', assetOut: 'BTC' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('select-asset-BTC')).toBeInTheDocument());
+    expect(screen.queryByTestId('select-asset-ETH')).not.toBeInTheDocument();
+  });
+
+  it('shows the private-asset hint', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument());
+  });
+
+  it('uses the exact You get heading when rate is 1', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), rate: 1 }));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByText('You get')).toBeInTheDocument());
+  });
+
+  it('confirms a final quote', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+      await Promise.resolve();
+    });
+    await settle(() => expect(screen.getByTestId('buy-completion')).toBeInTheDocument());
+  });
+
+  it('shows a confirm error from the API', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockRejectedValue({ message: 'confirm-failed' });
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+      await Promise.resolve();
+    });
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('confirm-failed'));
+  });
+
+  it('opens and cancels the address switch', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum'],
+        blockchain: 'Ethereum',
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('dropdown-address')).toBeInTheDocument());
+    const switchButton = screen.getByTestId('select-address-Switch address');
+    await act(async () => {
+      switchButton.click();
+    });
+    expect(screen.getByTestId('address-switch')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('address-switch-cancel').click();
+    });
+    expect(screen.queryByTestId('address-switch')).not.toBeInTheDocument();
+  });
+
+  it('logs out when the address switch is confirmed', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum'],
+        blockchain: 'Ethereum',
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('dropdown-address')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('select-address-Switch address').click();
+    });
+    await act(async () => {
+      screen.getByTestId('address-switch-confirm').click();
+    });
+    expect(mockLogout).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/connect', { setRedirect: true });
+  });
+
+  it('switches blockchain when another chain address is chosen', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockSession = { address: '0xabc' };
+    mockUseAppParams.mockReturnValue(
+      baseAppParams({
+        hideTargetSelection: false,
+        availableBlockchains: ['Ethereum', 'Bitcoin'],
+        blockchain: 'Ethereum',
+      }),
+    );
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('dropdown-address')).toBeInTheDocument());
+    const buttons = screen.getAllByTestId(/select-address-/);
+    await act(async () => {
+      buttons[1].click();
+    });
+    expect(mockSetParams).toHaveBeenCalled();
+    expect(mockSwitchBlockchain).toHaveBeenCalled();
+  });
+
+  it('submits the empty onSubmit handler', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('form-submit').click();
+    });
+  });
+
+  it('navigates to generate a personal IBAN from a non-Frick currency', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByTestId('select-currency-USD').click();
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Generate personal IBAN' }).click();
+    });
+    expect(mockNavigate).toHaveBeenCalled();
   });
 });

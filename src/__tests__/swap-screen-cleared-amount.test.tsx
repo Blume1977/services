@@ -40,7 +40,8 @@ let mockSession: { address: string; blockchains: string[] } | undefined;
 let mockActiveWallet: string | undefined;
 let mockFlags: string | undefined;
 let mockHideTarget = true;
-const mockGetAsset = (list: any[], name?: string) => (list ?? []).find((a: any) => a.name === name) ?? list?.[0];
+const mockGetAsset = (list: any[], name?: string) =>
+  name ? (list ?? []).find((a: any) => a.name === name || a.uniqueName === name) : undefined;
 const mockGetAssets = () => mockAssets;
 const mockIsSameAsset = (asset: any, filter: string) => asset.name === filter || asset.uniqueName === filter;
 const mockTranslate = (_ns: string, key: string) => key;
@@ -661,5 +662,23 @@ describe('SwapScreen', () => {
     render(<SwapScreen />);
     await flushQuote();
     expect(screen.getByTestId('dropdown-address')).toBeInTheDocument();
+  });
+
+  it('falls back to the wallet blockchain when assetIn does not match', async () => {
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('select-sourceAsset-ETH')).toBeInTheDocument();
+  });
+
+  it('quotes from get data when spend was never set', async () => {
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'NOPE' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '0.01' } });
+    });
+    await flushQuote();
+    expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
   });
 });
