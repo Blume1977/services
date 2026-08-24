@@ -803,6 +803,22 @@ describe('SwapScreen', () => {
     expect(mockSwitchBlockchain).toHaveBeenCalled();
   });
 
+  it('keeps the typed spend amount when only the receive address changes on the same chain', async () => {
+    mockHideTarget = false;
+    mockUserAddresses = [{ address: '0xdef', blockchains: ['Ethereum'] }];
+    mockUseAppParams.mockReturnValue(baseAppParams({ hideTargetSelection: false }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    await act(async () => {
+      screen.getByTestId('select-address-1').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.receiverAddress === '0xdef')).toBe(true);
+  });
+
   it('invokes Retry after a generic error', async () => {
     mockReceiveFor
       .mockRejectedValueOnce({ statusCode: 500, message: 'boom' })

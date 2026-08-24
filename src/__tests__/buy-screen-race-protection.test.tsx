@@ -1209,6 +1209,54 @@ describe('BuyScreen cleared amount protection', () => {
     expect(mockReceiveFor).not.toHaveBeenCalled();
   });
 
+  it('does not resume a stale quote after personal-IBAN rows settle on a cleared spend field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockIsUserLoading = true;
+    mockPersonalIbanRows = {
+      activePersonalIbans: undefined,
+      personalIbanRowsSettled: false,
+      userLoadTimedOut: false,
+    };
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    const { rerender, unmount } = render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+      mockIsUserLoading = false;
+      mockPersonalIbanRows = {
+        activePersonalIbans: [],
+        personalIbanRowsSettled: true,
+        userLoadTimedOut: false,
+      };
+      rerender(<BuyScreen />);
+    });
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(
+      mockReceiveFor.mock.calls.every((call: any) => call[0]?.amount !== 300 && Number(call[0]?.amount) !== 300),
+    ).toBe(true);
+    unmount();
+  });
+
+  it('does not resume a stale quote after a selector change on a cleared target field', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    const { rerender, unmount } = render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+      mockPersonalIban.mockReturnValue('Frick');
+      rerender(<BuyScreen />);
+    });
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    unmount();
+  });
+
   it('shows a personal-IBAN KYC hint when an explicit Frick selector is rejected', async () => {
     mockPersonalIban.mockReturnValue('Frick');
     mockUseAppParams.mockReturnValue(baseAppParams());
