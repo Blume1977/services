@@ -139,7 +139,21 @@ jest.mock('@dfx.swiss/react-components', () => {
     ),
     StyledHorizontalStack: ({ children }: any) => <div>{children}</div>,
     StyledInfoText: ({ children }: any) => <div>{children}</div>,
-    StyledInput: () => null,
+    // Interactive so the clear/retype protection can drive the amount fields like a user would.
+    StyledInput: ({ name, control }: any) =>
+      name ? (
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }: any) => (
+            <input
+              data-testid={`input-${name}`}
+              value={field.value ?? ''}
+              onChange={(e: any) => field.onChange(e.target.value)}
+            />
+          )}
+        />
+      ) : null,
     StyledLink: ({ children, label }: any) => <div>{label ?? children}</div>,
     StyledLoadingSpinner: () => null,
     StyledSearchDropdown: () => null,
@@ -229,7 +243,7 @@ jest.mock('../hooks/navigation.hook', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
 }));
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import BuyScreen from 'src/screens/buy.screen';
 
 function baseAppParams(overrides: Record<string, unknown> = {}) {
@@ -378,5 +392,86 @@ describe('BuyScreen quote race protection', () => {
     });
     await waitFor(() => expect(screen.getByTestId('payment-info')).toHaveTextContent('333'));
     expect(mockReceiveFor.mock.calls.every((call: any) => !('personalIbanProvider' in call[0]))).toBe(true);
+  });
+});
+
+// Clear/retype protection: an amount field the user just emptied must never be refilled from the
+// opposite side — the exact-price echo used to write the recomputed equivalent (e.g. 299.98 for
+// the 300 default) into the field mid-typing, making custom amounts nearly impossible to enter.
+describe('BuyScreen cleared amount protection', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  async function settle(callback: () => unknown) {
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+      }
+    });
+    return callback();
+  }
+
+  function quoteFor(req: any) {
+    const spendAmount = req.amount !== undefined ? Number(req.amount) : 300;
+    return {
+      id: 10,
+      // the exact-price echo answers with the Rappen-exact equivalent, not the typed amount
+      amount: req.exactPrice ? Number((spendAmount - 0.02).toFixed(2)) : spendAmount,
+      currency: { name: 'CHF' },
+      estimatedAmount: req.exactPrice ? 0.004709 : 0.0047,
+      asset: { name: 'BTC', uniqueName: 'Bitcoin' },
+      minVolume: 1,
+      maxVolume: 100000,
+      isValid: true,
+      exchangeRate: 1,
+      rate: 1,
+      fees: {},
+      priceSteps: [],
+      isPersonalIban: false,
+      name: 'DFX AG',
+    };
+  }
+
+  it('keeps a cleared amount field empty and accepts the retyped amount', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+
+    // Default flow: 300 stays in the field, the exact estimate lands on the target side only.
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    await settle(() => expect(screen.getByTestId('payment-info')).toHaveTextContent('299.98'));
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.004709');
+
+    // The user empties the field to retype: no cross-side recompute may refill it.
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument());
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+
+    // Retyping works and the echo still only updates the target side.
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '150' } });
+    });
+    await settle(() => expect(screen.getByTestId('payment-info')).toHaveTextContent('149.98'));
+    expect(screen.getByTestId('input-amount')).toHaveValue('150');
+  });
+
+  it('keeps a cleared target amount field empty (mirrored protection)', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.004709'));
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument());
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
   });
 });

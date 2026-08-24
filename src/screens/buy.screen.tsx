@@ -302,6 +302,12 @@ export default function BuyScreen(): JSX.Element {
   const activePaymentInfoIdRef = useRef<number>();
   activePaymentInfoIdRef.current = paymentInfo?.id;
   const isMountedRef = useRef(true);
+  // A non-empty → empty transition of an amount field is an edit in progress: the cross-side
+  // fallbacks below must not recompute into a field the user just emptied to retype — the
+  // exact-price echo would overwrite their input mid-typing. A field that was never set (deep
+  // links, first render) still resolves over the fallbacks.
+  const previousAmountRef = useRef<string>();
+  const previousTargetAmountRef = useRef<string>();
 
   const effectivePersonalIban = activeSuppressPersonalIban ? undefined : personalIban;
   const personalIbanSelector = activeSuppressPersonalIban
@@ -444,6 +450,9 @@ export default function BuyScreen(): JSX.Element {
 
   // SPEND data changed
   useEffect(() => {
+    const amountCleared = !selectedAmount && !!previousAmountRef.current;
+    previousAmountRef.current = selectedAmount;
+
     const requiresUpdate =
       selectedAmount !== paymentInfo?.amount?.toString() ||
       selectedCurrency?.name !== paymentInfo?.currency.name ||
@@ -455,6 +464,9 @@ export default function BuyScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasSpendData) {
         updateData(Side.GET);
+      } else if (amountCleared) {
+        // the user is retyping the amount — never refill the field from the target side
+        setValidatedData(undefined);
       } else if (hasGetData) {
         updateData(Side.SPEND);
       }
@@ -463,6 +475,9 @@ export default function BuyScreen(): JSX.Element {
 
   // GET data changed
   useEffect(() => {
+    const targetAmountCleared = !selectedTargetAmount && !!previousTargetAmountRef.current;
+    previousTargetAmountRef.current = selectedTargetAmount;
+
     const isSameTargetAmount = selectedTargetAmount === paymentInfo?.estimatedAmount?.toString();
     const requiresUpdate = !isSameTargetAmount || selectedAsset?.uniqueName !== paymentInfo?.asset?.uniqueName;
 
@@ -472,6 +487,9 @@ export default function BuyScreen(): JSX.Element {
     if (requiresUpdate) {
       if (hasGetData) {
         updateData(Side.SPEND);
+      } else if (targetAmountCleared) {
+        // the user is retyping the target amount — never refill the field from the spend side
+        setValidatedData(undefined);
       } else if (hasSpendData) {
         updateData(Side.GET);
       }
