@@ -682,6 +682,24 @@ describe('SwapScreen', () => {
     expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
   });
 
+  it('quotes from a new spend amount after the target field was cleared', async () => {
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    const callsBefore = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.2');
+    const after = mockReceiveFor.mock.calls.slice(callsBefore);
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.every((call: any) => String(call[0].amount) === '0.2')).toBe(true);
+  });
+
   it('falls back to the target side after spend is cleared and the source asset changes', async () => {
     render(<SwapScreen />);
     await flushQuote();

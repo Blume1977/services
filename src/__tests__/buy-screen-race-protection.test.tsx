@@ -609,6 +609,25 @@ describe('BuyScreen cleared amount protection', () => {
     expect(retyped.every((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
   });
 
+  it('does not restore amountOut after the user clears target and then changes asset', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: undefined, amountOut: '0.01' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue('0.01'));
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+
+    await act(async () => {
+      screen.getByTestId('select-asset-ETH').click();
+    });
+    await settle(() => expect(screen.getByTestId('input-targetAmount')).toHaveValue(''));
+  });
+
   it('still quotes from a never-set spend field via amountOut (deep-link fallback)', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: undefined, amountOut: '0.01' }));
