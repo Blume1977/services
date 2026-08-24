@@ -676,6 +676,28 @@ describe('BuyScreen cleared amount protection', () => {
     expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
 
+  it('does not fall through to amountOut after the user clears spend', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: '100', amountOut: '0.01' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('100'));
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+
+    const callsBeforeAsset = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      screen.getByTestId('select-asset-ETH').click();
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue(''));
+    const after = mockReceiveFor.mock.calls.slice(callsBeforeAsset);
+    expect(after.every((call: any) => call[0].amount === undefined)).toBe(true);
+  });
+
   it('does not restore amountIn after the user clears spend and then changes asset', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams({ amountIn: '100' }));

@@ -535,7 +535,7 @@ export default function SwapScreen(): JSX.Element {
 
   function setAddress() {
     if (session?.address && addressItems.length > 0) {
-      // Priorität: 1. blockchain URL-Parameter, 2. assetOut Blockchain, 3. erste Adresse
+      // Prefer URL blockchain, then assetOut chain, then the first address.
       let preferredChain = blockchain;
       if (!preferredChain && assetOut) {
         // Extract blockchain from assetOut (format: Blockchain/AssetName)

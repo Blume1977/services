@@ -381,10 +381,10 @@ export default function BuyScreen(): JSX.Element {
   }, [availablePaymentMethods, paymentMethod]);
 
   useEffect(() => {
-    if (amountIn && !spendClearedByUserRef.current) {
-      setVal('amount', amountIn);
-    } else if (amountOut && !targetClearedByUserRef.current) {
-      setVal('targetAmount', amountOut);
+    if (amountIn) {
+      if (!spendClearedByUserRef.current) setVal('amount', amountIn);
+    } else if (amountOut) {
+      if (!targetClearedByUserRef.current) setVal('targetAmount', amountOut);
     } else if (
       selectedAsset &&
       !selectedAmount &&
