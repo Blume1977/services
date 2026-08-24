@@ -514,6 +514,39 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('input-amount')).toHaveValue('0.3');
   });
 
+  it('still invalidates quotes when target is cleared after an exact-price no-op write', async () => {
+    render(<SellScreen />);
+    await flushQuote();
+    const targetBefore = (screen.getByTestId('input-targetAmount') as HTMLInputElement).value;
+    await act(async () => {
+      screen.getByTestId('select-currency-1').click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue(targetBefore);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue('');
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
+  it('still invalidates quotes when spend is cleared after an exact-price no-op write', async () => {
+    render(<SellScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '100' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('0.1');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
   it('clears a KYC quote error when the user empties the spend field', async () => {
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
     render(<SellScreen />);

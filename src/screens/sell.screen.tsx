@@ -275,7 +275,10 @@ export default function SellScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedAsset;
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
-    if (requiresUpdate && !exactPriceWrite) {
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+      quoteGeneration.current += 1;
+      isExactPriceWriteRef.current = false;
+    } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
     }
 
@@ -317,7 +320,10 @@ export default function SellScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedAsset;
     const hasGetData = selectedTargetAmount && selectedCurrency && selectedBankAccount;
 
-    if (requiresUpdate && !exactPriceWrite) {
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+      quoteGeneration.current += 1;
+      isExactPriceWriteRef.current = false;
+    } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
     }
 

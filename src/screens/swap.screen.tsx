@@ -328,7 +328,10 @@ export default function SwapScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedSourceAsset;
     const hasGetData = selectedTargetAmount && selectedTargetAsset && selectedAddress;
 
-    if (requiresUpdate && !exactPriceWrite) {
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+      quoteGeneration.current += 1;
+      isExactPriceWriteRef.current = false;
+    } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
     }
 
@@ -369,7 +372,10 @@ export default function SwapScreen(): JSX.Element {
     const hasSpendData = enteredAmount && selectedSourceAsset;
     const hasGetData = selectedTargetAmount && selectedTargetAsset && selectedAddress;
 
-    if (requiresUpdate && !exactPriceWrite) {
+    if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
+      quoteGeneration.current += 1;
+      isExactPriceWriteRef.current = false;
+    } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
     }
 
