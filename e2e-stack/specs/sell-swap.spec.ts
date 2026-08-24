@@ -565,11 +565,18 @@ test.describe('Sell + Swap e2e', () => {
     await spend.blur();
 
     await expect
-      .poll(async () => spend.inputValue(), {
-        timeout: 8000,
-        message: 'cleared sell spend amount must stay empty',
-      })
-      .toBe('');
+      .poll(
+        async () => {
+          const value = await spend.inputValue();
+          const paymentVisible = await page
+            .getByRole('heading', { name: 'Payment Information' })
+            .isVisible()
+            .catch(() => false);
+          return { value, paymentVisible };
+        },
+        { timeout: 8000, message: 'cleared sell spend amount must stay empty' },
+      )
+      .toEqual({ value: '', paymentVisible: false });
   });
 
   // ---------------------------------------------------------------------------
@@ -806,11 +813,18 @@ test.describe('Sell + Swap e2e', () => {
     await spend.blur();
 
     await expect
-      .poll(async () => spend.inputValue(), {
-        timeout: 8000,
-        message: 'cleared swap spend amount must stay empty',
-      })
-      .toBe('');
+      .poll(
+        async () => {
+          const value = await spend.inputValue();
+          const paymentVisible = await page
+            .getByRole('heading', { name: 'Payment Information' })
+            .isVisible()
+            .catch(() => false);
+          return { value, paymentVisible };
+        },
+        { timeout: 8000, message: 'cleared swap spend amount must stay empty' },
+      )
+      .toEqual({ value: '', paymentVisible: false });
   });
 
   // Sanity: incomplete personal data is redirected off /sell by the API/UI (Ident data incomplete).

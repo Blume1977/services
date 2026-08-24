@@ -1096,6 +1096,8 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByTestId('form-submit').click();
     });
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
   });
 
   it('waits for personal IBAN rows instead of quoting while the user is loading', async () => {
@@ -1134,6 +1136,9 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByRole('button', { name: 'Show available IBAN' }).click();
     });
+    await settle(() =>
+      expect(screen.queryByRole('button', { name: 'Show available IBAN' })).not.toBeInTheDocument(),
+    );
   });
 
   it('suppresses automatic Frick after a KYC rejection when a Yapeal row exists', async () => {
@@ -1153,6 +1158,9 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
     await settle(() => expect(mockReceiveFor.mock.calls.length).toBeGreaterThan(0));
+    const providers = mockReceiveFor.mock.calls.map((call: any) => call[0]?.personalIbanProvider);
+    expect(providers.some((provider: unknown) => provider === 'Frick')).toBe(true);
+    expect(providers[providers.length - 1]).not.toBe('Frick');
   });
 
   it('acknowledges a failed Frick verification and continues without the selector', async () => {
@@ -1166,6 +1174,7 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
     });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
   });
 
   it('maps a non-KYC personal-IBAN HTTP error onto QuoteErrorHint', async () => {
@@ -1200,6 +1209,7 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByTestId('switch-provider').click();
     });
+    expect(mockReceiveFor.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('blocks an unrecognized personal IBAN selector', async () => {
@@ -1212,6 +1222,7 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
     });
+    await settle(() => expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument());
   });
 
   it('navigates to generate a personal IBAN from a non-Frick currency', async () => {
@@ -1237,6 +1248,9 @@ describe('BuyScreen cleared amount protection', () => {
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    expect(
+      mockReceiveFor.mock.calls.every((call: any) => call[0]?.personalIbanProvider !== 'Frick'),
+    ).toBe(true);
   });
 
   it('falls back to the first asset when assetOut does not match', async () => {
@@ -1292,6 +1306,7 @@ describe('BuyScreen cleared amount protection', () => {
     await act(async () => {
       screen.getByRole('button', { name: 'Continue without personal IBAN' }).click();
     });
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
   });
 
   it('maps an Instant paymentMethod param onto bank', async () => {
@@ -1321,9 +1336,11 @@ describe('BuyScreen cleared amount protection', () => {
     );
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('switch-provider')).toBeInTheDocument());
+    const callsBefore = mockReceiveFor.mock.calls.length;
     await act(async () => {
       screen.getByTestId('switch-provider').click();
     });
+    expect(mockReceiveFor.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
   it('falls back to the preferred currency when assetIn is unknown', async () => {
@@ -1459,6 +1476,8 @@ describe('BuyScreen cleared amount protection', () => {
       resolveQuote(quoteFor({ amount: 300 }));
       await Promise.resolve();
     });
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
   });
 
   it('does not quote a zero spend amount', async () => {
@@ -1467,10 +1486,13 @@ describe('BuyScreen cleared amount protection', () => {
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('300'));
+    const callsBefore = mockReceiveFor.mock.calls.length;
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
     });
     await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('0'));
+    const after = mockReceiveFor.mock.calls.slice(callsBefore);
+    expect(after.every((call: any) => Number(call[0]?.amount) !== 0)).toBe(true);
   });
 
   it('uses availableBlockchains when both wallet and URL chain are unset', async () => {

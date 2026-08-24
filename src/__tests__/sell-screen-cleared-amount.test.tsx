@@ -784,6 +784,8 @@ describe('SellScreen', () => {
     await act(async () => {
       screen.getByTestId('form-submit').click();
     });
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
   });
 
   it('toggles the bank-account modal title', async () => {
@@ -797,6 +799,8 @@ describe('SellScreen', () => {
     await act(async () => {
       latest.onBack();
     });
+    const afterBack = mockLayoutOptions.mock.calls[mockLayoutOptions.mock.calls.length - 1][0];
+    expect(afterBack.title).toBe('Sell');
   });
 
   it('uses the exact You get heading when rate is 1', async () => {
@@ -844,13 +848,20 @@ describe('SellScreen', () => {
   });
 
   it('invokes Retry after a generic error', async () => {
-    mockReceiveFor.mockRejectedValue({ statusCode: 500, message: 'boom' });
+    mockReceiveFor
+      .mockRejectedValueOnce({ statusCode: 500, message: 'boom' })
+      .mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
     render(<SellScreen />);
     await flushQuote();
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
     await act(async () => {
       screen.getByRole('button', { name: 'Retry' }).click();
     });
-    expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
   });
 
   it('quotes from a new spend amount after the target field was cleared', async () => {
@@ -1053,11 +1064,14 @@ describe('SellScreen', () => {
   it('does not quote a zero spend amount', async () => {
     render(<SellScreen />);
     await flushQuote();
+    const callsBefore = mockReceiveFor.mock.calls.length;
     await act(async () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
     });
     await flushQuote();
     expect(screen.getByTestId('input-amount')).toHaveValue('0');
+    const after = mockReceiveFor.mock.calls.slice(callsBefore);
+    expect(after.every((call: any) => Number(call[0]?.amount) !== 0)).toBe(true);
   });
 
   it('drops a quote error that rejects after unmount', async () => {
@@ -1077,6 +1091,8 @@ describe('SellScreen', () => {
       rejectQuote({ statusCode: 500, message: 'late' });
       await Promise.resolve();
     });
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
   });
 
   it('drops a quote that resolves after unmount', async () => {
@@ -1096,5 +1112,7 @@ describe('SellScreen', () => {
       resolveQuote(quoteFor({ amount: 0.1 }));
       await Promise.resolve();
     });
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
   });
 });
