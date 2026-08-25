@@ -636,9 +636,12 @@ export default function SwapScreen(): JSX.Element {
     setIsProcessing(true);
     setErrorMessage(undefined);
 
-    if (canSendTransaction() && !activeWallet) return close(paymentInfo, false);
-
     try {
+      if (canSendTransaction() && !activeWallet) {
+        close(paymentInfo, false);
+        return;
+      }
+
       if (canSendTransaction()) {
         await sendTransaction(paymentInfo).then(setSwapTxId);
       }

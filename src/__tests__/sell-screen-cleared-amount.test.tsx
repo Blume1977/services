@@ -943,6 +943,30 @@ describe('SellScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/connect', { setRedirect: true });
   });
 
+  it('shows an error and allows retry when updating the bank account fails', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockUpdateAccount.mockRejectedValue({ message: 'iban save failed' });
+    render(<SellScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+    expect(screen.getByTestId('error-hint')).toBeInTheDocument();
+    mockUpdateAccount.mockResolvedValue(bankAccount);
+    await act(async () => {
+      screen.getByRole('button', { name: 'Retry' }).click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('sell-completion')).toBeInTheDocument();
+  });
+
   it('completes a manual transfer from form submit', async () => {
     mockCanSendTransaction.mockReturnValue(false);
     render(<SellScreen />);

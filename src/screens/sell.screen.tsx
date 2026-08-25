@@ -577,14 +577,14 @@ export default function SellScreen(): JSX.Element {
     setIsProcessing(true);
     setErrorMessage(undefined);
 
-    await updateBankAccount();
-
-    if (canSendTransaction() && !activeWallet) {
-      closeServices({ type: CloseType.SELL, isComplete: false, sell: paymentInfo }, false);
-      return;
-    }
-
     try {
+      await updateBankAccount();
+
+      if (canSendTransaction() && !activeWallet) {
+        closeServices({ type: CloseType.SELL, isComplete: false, sell: paymentInfo }, false);
+        return;
+      }
+
       if (canSendTransaction()) {
         await sendTransaction(paymentInfo).then(setSellTxId);
       }
