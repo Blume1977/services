@@ -676,7 +676,7 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.getByTestId('input-amount-error')).toBeInTheDocument();
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -882,7 +882,7 @@ describe('SwapScreen', () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -897,7 +897,7 @@ describe('SwapScreen', () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
     });
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -911,7 +911,7 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument();
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -924,7 +924,7 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.getByTestId('quote-error')).toBeInTheDocument();
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -937,7 +937,7 @@ describe('SwapScreen', () => {
     await flushQuote();
     expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
@@ -950,12 +950,12 @@ describe('SwapScreen', () => {
     render(<SwapScreen />);
     await flushQuote();
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockSendTransaction).toHaveBeenCalledTimes(1);
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockSendTransaction).toHaveBeenCalledTimes(1);

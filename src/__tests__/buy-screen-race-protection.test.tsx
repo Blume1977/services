@@ -1340,7 +1340,7 @@ describe('BuyScreen cleared amount protection', () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1359,7 +1359,7 @@ describe('BuyScreen cleared amount protection', () => {
       fireEvent.change(screen.getByTestId('input-targetAmount'), { target: { value: '' } });
     });
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1373,7 +1373,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('boom'));
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1389,7 +1389,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1402,7 +1402,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1415,7 +1415,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('quote-error')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1430,7 +1430,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('input-amount-error')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1445,7 +1445,7 @@ describe('BuyScreen cleared amount protection', () => {
       expect(screen.getByRole('button', { name: 'Continue without personal IBAN' })).toBeInTheDocument(),
     );
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).not.toHaveBeenCalled();
@@ -1459,12 +1459,12 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).toHaveBeenCalledTimes(1);
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(mockConfirmFor).toHaveBeenCalledTimes(1);

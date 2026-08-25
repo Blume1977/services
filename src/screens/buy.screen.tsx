@@ -754,8 +754,7 @@ export default function BuyScreen(): JSX.Element {
       })
       .then((info) => {
         if (!isRunning || !info) return;
-        if (debouncedValidatedData.sideToUpdate === Side.SPEND && spendClearedByUserRef.current) return;
-        if (debouncedValidatedData.sideToUpdate === Side.GET && targetClearedByUserRef.current) return;
+        if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
         if (generation !== quoteGeneration.current || customerIdentityRef.current !== loadingCustomerIdentity) return;
         const synchronizedAmount =
           debouncedValidatedData.sideToUpdate === Side.SPEND
@@ -955,7 +954,6 @@ export default function BuyScreen(): JSX.Element {
       errorMessage ||
       customAmountError ||
       needsPersonalIbanAcknowledgement ||
-      !isQuoteFinal ||
       isConfirming
     ) {
       return;
@@ -1372,7 +1370,7 @@ export default function BuyScreen(): JSX.Element {
                             <StyledButton
                               width={StyledButtonWidth.FULL}
                               label={translate('screens/buy', 'Click here once you have issued the transfer')}
-                              onClick={() => confirm(paymentInfo.id)}
+                              onClick={() => onSubmit()}
                               disabled={!isQuoteFinal}
                               isLoading={isConfirming}
                               caps={false}

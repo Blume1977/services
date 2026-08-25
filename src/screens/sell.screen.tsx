@@ -391,8 +391,7 @@ export default function SellScreen(): JSX.Element {
       })
       .then((info) => {
         if (!isRunning || !info) return;
-        if (validatedData.sideToUpdate === Side.SPEND && spendClearedByUserRef.current) return;
-        if (validatedData.sideToUpdate === Side.GET && targetClearedByUserRef.current) return;
+        if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
         if (generation !== quoteGeneration.current) return;
         if (validatedData.sideToUpdate === Side.SPEND) {
           const nextAmount = info.amount.toString();
@@ -809,7 +808,7 @@ export default function SellScreen(): JSX.Element {
                                 ? 'Complete transaction in your wallet'
                                 : 'Click here once you have issued the transaction',
                             )}
-                            onClick={() => handleNext(paymentInfo)}
+                            onClick={() => onSubmit()}
                             caps={false}
                             className="mt-4"
                             isLoading={isProcessing}
