@@ -677,6 +677,7 @@ export default function SwapScreen(): JSX.Element {
       ) : showsSwitchScreen ? (
         <AddressSwitch onClose={(r) => (r ? onAddressSwitch() : setShowsSwitchScreen(false))} />
       ) : (
+        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
         <Form
           control={control}
           rules={rules}
@@ -879,6 +880,7 @@ export default function SwapScreen(): JSX.Element {
             </StyledVerticalStack>
           )}
         </Form>
+        </form>
       )}
     </>
   );

@@ -1121,7 +1121,15 @@ export default function BuyScreen(): JSX.Element {
           navigateOnClose
         />
       ) : (
-        <Form control={control} rules={rules} errors={{}} onSubmit={handleSubmit(onSubmit)} translate={translateError}>
+        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
+        <Form
+          control={control}
+          rules={rules}
+          errors={{}}
+          onSubmit={handleSubmit(onSubmit)}
+          translate={translateError}
+          hasFormElement={false}
+        >
           <StyledVerticalStack gap={8} full center>
             {availableCurrencies && availableAssets && (
               <>
@@ -1373,6 +1381,7 @@ export default function BuyScreen(): JSX.Element {
             )}
           </StyledVerticalStack>
         </Form>
+        </form>
       )}
     </>
   );

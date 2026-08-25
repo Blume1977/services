@@ -621,6 +621,7 @@ export default function SellScreen(): JSX.Element {
       ) : paymentInfo && isTxDone ? (
         <SellCompletion paymentInfo={paymentInfo} navigateOnClose={true} txId={sellTxId} />
       ) : (
+        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
         <Form
           control={control}
           rules={rules}
@@ -815,6 +816,7 @@ export default function SellScreen(): JSX.Element {
             </StyledVerticalStack>
           )}
         </Form>
+        </form>
       )}
     </>
   );
