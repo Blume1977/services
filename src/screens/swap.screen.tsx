@@ -134,6 +134,7 @@ export default function SwapScreen(): JSX.Element {
   const [swapTxId, setSwapTxId] = useState<string>();
   const [showsSwitchScreen, setShowsSwitchScreen] = useState(false);
   const [validatedData, setValidatedData] = useState<ValidatedData>();
+  const [retryToken, setRetryToken] = useState(0);
 
   // form
   const { control, handleSubmit, setValue, resetField } = useForm<FormData>({ mode: 'onTouched' });
@@ -485,7 +486,7 @@ export default function SwapScreen(): JSX.Element {
     return () => {
       isRunning = false;
     };
-  }, [useDebounce(validatedData, 500)]);
+  }, [useDebounce(validatedData, 500), retryToken]);
 
   function validateSwap(swap: Swap): void {
     setCustomAmountError(undefined);
@@ -814,7 +815,7 @@ export default function SwapScreen(): JSX.Element {
                       <StyledButton
                         width={StyledButtonWidth.MIN}
                         label={translate('general/actions', 'Retry')}
-                        onClick={() => setVal('amount', enteredAmount)} // re-trigger
+                        onClick={() => setRetryToken((token) => token + 1)}
                         className="mt-4"
                         color={StyledButtonColor.STURDY_WHITE}
                       />

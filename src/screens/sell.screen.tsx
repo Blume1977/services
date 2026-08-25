@@ -140,6 +140,7 @@ export default function SellScreen(): JSX.Element {
   const [bankAccountSelection, setBankAccountSelection] = useState(false);
   const [showsSwitchScreen, setShowsSwitchScreen] = useState(false);
   const [validatedData, setValidatedData] = useState<ValidatedData>();
+  const [retryToken, setRetryToken] = useState(0);
 
   // form
   const { control, handleSubmit, setValue, resetField } = useForm<FormData>({ mode: 'onTouched' });
@@ -433,7 +434,7 @@ export default function SellScreen(): JSX.Element {
     return () => {
       isRunning = false;
     };
-  }, [useDebounce(validatedData, 500)]);
+  }, [useDebounce(validatedData, 500), retryToken]);
 
   function validateSell(sell: Sell): void {
     setCustomAmountError(undefined);
@@ -755,7 +756,7 @@ export default function SellScreen(): JSX.Element {
                       <StyledButton
                         width={StyledButtonWidth.MIN}
                         label={translate('general/actions', 'Retry')}
-                        onClick={() => updateData(Side.GET)} // re-trigger
+                        onClick={() => setRetryToken((token) => token + 1)}
                         className="mt-4"
                         color={StyledButtonColor.STURDY_WHITE}
                       />

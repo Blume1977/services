@@ -810,6 +810,12 @@ describe('SwapScreen', () => {
       await Promise.resolve();
     });
     expect(screen.getByTestId('error-hint')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Retry' }).click();
+    });
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('error-hint')).not.toBeInTheDocument();
   });
 
   it('marks a manual transfer complete without sending', async () => {
@@ -1050,9 +1056,6 @@ describe('SwapScreen', () => {
     expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
     await act(async () => {
       screen.getByRole('button', { name: 'Retry' }).click();
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
     });
     await flushQuote();
     expect(screen.getByTestId('payment-info')).toBeInTheDocument();
