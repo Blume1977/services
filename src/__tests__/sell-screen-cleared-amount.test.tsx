@@ -942,7 +942,7 @@ describe('SellScreen', () => {
     render(<SellScreen />);
     await flushQuote();
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     expect(screen.getByTestId('sell-completion')).toBeInTheDocument();

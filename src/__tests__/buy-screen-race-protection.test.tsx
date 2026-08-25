@@ -1322,7 +1322,7 @@ describe('BuyScreen cleared amount protection', () => {
     render(<BuyScreen />);
     await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
     await act(async () => {
-      screen.getByTestId('form-submit').click();
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
       await Promise.resolve();
     });
     await settle(() => expect(screen.getByTestId('buy-completion')).toBeInTheDocument());

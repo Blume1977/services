@@ -554,7 +554,7 @@ export default function SellScreen(): JSX.Element {
     return assets.filter((a) => allowedAssets.some((f) => isSameAsset(a, f)));
   }
 
-  function onSubmit(_data: FormData) {
+  function onSubmit(_data?: FormData) {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
     if (!paymentInfo || kycError || errorMessage || customAmountError?.hideInfos || isProcessing) return;
     if (selectedAsset?.category === AssetCategory.PRIVATE && !flags?.includes('private')) return;
@@ -621,7 +621,13 @@ export default function SellScreen(): JSX.Element {
       ) : paymentInfo && isTxDone ? (
         <SellCompletion paymentInfo={paymentInfo} navigateOnClose={true} txId={sellTxId} />
       ) : (
-        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="w-full"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
         <Form
           control={control}
           rules={rules}

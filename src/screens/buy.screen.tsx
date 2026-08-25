@@ -947,7 +947,7 @@ export default function BuyScreen(): JSX.Element {
     return assets.filter((a) => allowedAssets.some((f) => isSameAsset(a, f)));
   }
 
-  function onSubmit(_data: FormData) {
+  function onSubmit(_data?: FormData) {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
     if (
       !paymentInfo ||
@@ -1121,7 +1121,13 @@ export default function BuyScreen(): JSX.Element {
           navigateOnClose
         />
       ) : (
-        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="w-full"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
         <Form
           control={control}
           rules={rules}

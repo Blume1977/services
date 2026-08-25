@@ -598,7 +598,7 @@ export default function SwapScreen(): JSX.Element {
     );
   }
 
-  function onSubmit(_data: FormData) {
+  function onSubmit(_data?: FormData) {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
     if (!paymentInfo || kycError || errorMessage || customAmountError?.hideInfos || isProcessing) return;
     if (
@@ -677,7 +677,13 @@ export default function SwapScreen(): JSX.Element {
       ) : showsSwitchScreen ? (
         <AddressSwitch onClose={(r) => (r ? onAddressSwitch() : setShowsSwitchScreen(false))} />
       ) : (
-        <form className="w-full" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="w-full"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
         <Form
           control={control}
           rules={rules}
