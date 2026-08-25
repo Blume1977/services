@@ -125,6 +125,40 @@ describe('BankAccountSelector', () => {
     expect(mockCreateAccount).not.toHaveBeenCalled();
   });
 
+  it('does not overwrite a manually selected non-default account when no param is set', () => {
+    const other = { id: 8, iban: 'CH3908307000001001008', label: 'Other' };
+    mockBankAccounts = [existing, other];
+    const { rerender } = render(
+      <BankAccountSelector placeholder="IBAN" onChange={mockOnChange} onModalToggle={mockOnModalToggle} />,
+    );
+    expect(mockOnChange).toHaveBeenCalledWith(existing);
+    mockOnChange.mockClear();
+    rerender(
+      <BankAccountSelector
+        value={other}
+        placeholder="IBAN"
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('still forces the bank-account param over a different selected value', () => {
+    const other = { id: 8, iban: 'CH3908307000001001008', label: 'Other' };
+    mockBankAccounts = [existing, other];
+    mockBankAccountParam = existing.iban;
+    render(
+      <BankAccountSelector
+        value={other}
+        placeholder="IBAN"
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    expect(mockOnChange).toHaveBeenCalledWith(existing);
+  });
+
   it('selects an existing bank-account param without creating a new account', () => {
     mockBankAccountParam = existing.iban;
     render(

@@ -45,7 +45,11 @@ export const BankAccountSelector: React.FC<BankAccountSelectorProps> = ({
     const account = fromParam ?? (bankAccount ? undefined : fallback);
 
     if (account) {
-      if (value?.id !== account.id) onChange(account);
+      if (bankAccount) {
+        if (value?.id !== account.id) onChange(account);
+      } else if (!value) {
+        onChange(account);
+      }
       return;
     }
 
