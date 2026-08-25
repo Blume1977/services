@@ -3,13 +3,14 @@ const mockGetAccount = jest.fn();
 const mockOnChange = jest.fn();
 const mockOnModalToggle = jest.fn();
 const mockValidateIban = jest.fn(() => true as boolean | string);
+const mockFormatIban = jest.fn(() => undefined as string | undefined);
 
 const existing = { id: 1, iban: 'CH9300762011623852957', label: 'Main', default: true };
 let mockBankAccounts: typeof existing[] | undefined = [existing];
 let mockBankAccountParam: string | undefined;
 
 jest.mock('@dfx.swiss/react', () => ({
-  Utils: { formatIban: () => undefined },
+  Utils: { formatIban: (...args: unknown[]) => mockFormatIban(...args) },
   Validations: { Iban: () => ({ validate: (...args: unknown[]) => mockValidateIban(...args) }) },
   useBankAccountContext: () => ({
     bankAccounts: mockBankAccounts,
@@ -83,6 +84,7 @@ describe('BankAccountSelector', () => {
     );
     mockCreateAccount.mockResolvedValue({ id: 2, iban: 'DE89370400440532013000' });
     mockValidateIban.mockReturnValue(true);
+    mockFormatIban.mockReturnValue(undefined);
   });
 
   it('does nothing while bank accounts have not loaded', () => {
@@ -231,7 +233,7 @@ describe('BankAccountSelector', () => {
     expect(mockOnChange).not.toHaveBeenCalled();
   });
 
-  it('clears the in-flight create guard when createAccount rejects', async () => {
+  it('does not retry create after createAccount rejects', async () => {
     mockBankAccountParam = 'DE89370400440532013000';
     mockGetAccount.mockReturnValue(undefined);
     mockCreateAccount.mockRejectedValue(new Error('duplicate'));
@@ -284,6 +286,20 @@ describe('BankAccountSelector', () => {
     fireEvent.blur(screen.getByTestId('open-selector'));
     fireEvent.click(screen.getByTestId('close-modal'));
     expect(mockOnModalToggle).toHaveBeenCalledWith(false);
+  });
+
+  it('shows the formatted IBAN when formatIban returns a value', () => {
+    mockFormatIban.mockReturnValue('CH93 0076 2011 6238 5295 7');
+    render(
+      <BankAccountSelector
+        value={existing}
+        placeholder="IBAN"
+        isModalOpen
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    expect(screen.getByTestId('open-selector')).toHaveTextContent('CH93 0076 2011 6238 5295 7');
   });
 
   it('opens the modal from the selector button', () => {
