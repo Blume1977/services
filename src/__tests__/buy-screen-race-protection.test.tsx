@@ -1408,6 +1408,37 @@ describe('BuyScreen cleared amount protection', () => {
     expect(mockConfirmFor).not.toHaveBeenCalled();
   });
 
+  it('confirms from form submit on a private asset when the private flag is set', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT', flags: 'private' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    expect(screen.queryByTestId('private-asset-hint')).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    await settle(() => expect(screen.getByTestId('buy-completion')).toBeInTheDocument());
+    expect(mockConfirmFor).toHaveBeenCalled();
+  });
+
+  it('confirms from the payment CTA on a private asset when the private flag is set', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT', flags: 'private' }));
+    mockReceiveFor.mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    mockConfirmFor.mockResolvedValue(undefined);
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('payment-info')).toBeInTheDocument());
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transfer' }).click();
+      await Promise.resolve();
+    });
+    await settle(() => expect(screen.getByTestId('buy-completion')).toBeInTheDocument());
+    expect(mockConfirmFor).toHaveBeenCalled();
+  });
+
   it('does not confirm from form submit when KYC blocks payment', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());

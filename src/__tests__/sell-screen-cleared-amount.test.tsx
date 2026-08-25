@@ -991,6 +991,37 @@ describe('SellScreen', () => {
     expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
   });
 
+  it('completes from form submit on a private asset when the private flag is set', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate];
+    mockFlags = 'private';
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT', flags: 'private' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('private-asset-hint')).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('sell-completion')).toBeInTheDocument();
+  });
+
+  it('completes from the payment CTA on a private asset when the private flag is set', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate];
+    mockFlags = 'private';
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT', flags: 'private' }));
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transaction' }).click();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('sell-completion')).toBeInTheDocument();
+  });
+
   it('does not complete from form submit when KYC blocks payment', async () => {
     mockCanSendTransaction.mockReturnValue(false);
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));

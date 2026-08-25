@@ -917,6 +917,51 @@ describe('SwapScreen', () => {
     expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
   });
 
+  it('completes from form submit on a private source when the private flag is set', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate, btc];
+    mockFlags = 'private';
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT', flags: 'private' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    expect(screen.queryByTestId('private-asset-hint')).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('swap-completion')).toBeInTheDocument();
+  });
+
+  it('completes from the payment CTA on a private source when the private flag is set', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [usdtPrivate, btc];
+    mockFlags = 'private';
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetIn: 'USDT', flags: 'private' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Click here once you have issued the transaction' }).click();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('swap-completion')).toBeInTheDocument();
+  });
+
+  it('does not complete from form submit on a private target asset', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    mockAssets = [eth, usdtPrivate];
+    mockUseAppParams.mockReturnValue(baseAppParams({ assetOut: 'USDT' }));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('private-asset-hint')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
   it('does not complete from form submit when KYC blocks payment', async () => {
     mockCanSendTransaction.mockReturnValue(false);
     mockReceiveFor.mockImplementation((req: any) => Promise.resolve({ ...quoteFor(req), error: 'KycRequired' }));
