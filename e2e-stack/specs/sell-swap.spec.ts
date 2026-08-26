@@ -551,6 +551,12 @@ test.describe('Sell + Swap e2e', () => {
     await setupSellFullUiFlow(page, 'sell-form-submit');
     const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
     expect(outcome.kind).toBe('payment_info');
+    // Wallet CTA (`Complete transaction in your wallet`) is also payment_info; handleNext then
+    // closes instead of completing. Pin the manual path like the panel test and buy form-submit.
+    const completeBtn = page.getByRole('button', {
+      name: /Click here once you have issued the transaction/i,
+    });
+    await expect(completeBtn).toBeVisible();
     const form = page.locator('form').first();
     await expect(form).toBeVisible();
     await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
@@ -828,6 +834,10 @@ test.describe('Sell + Swap e2e', () => {
     await setupSwapFullUiFlow(page, 'swap-form-submit');
     const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
     expect(outcome.kind).toBe('payment_info');
+    const completeBtn = page.getByRole('button', {
+      name: /Click here once you have issued the transaction/i,
+    });
+    await expect(completeBtn).toBeVisible();
     const form = page.locator('form').first();
     await expect(form).toBeVisible();
     await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
