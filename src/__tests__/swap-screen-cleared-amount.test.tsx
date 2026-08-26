@@ -1076,6 +1076,30 @@ describe('SwapScreen', () => {
     expect(mockReceiveFor.mock.calls.some((call: any) => call[0]?.receiverAddress === '0xdef')).toBe(true);
   });
 
+  it('does not retry a quote after the spend amount becomes invalid', async () => {
+    mockReceiveFor
+      .mockRejectedValueOnce({ statusCode: 500, message: 'boom' })
+      .mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<SwapScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('boom');
+    const callsBefore = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
+    });
+    await flushQuote();
+    const retry = screen.queryByRole('button', { name: 'Retry' });
+    if (retry) {
+      await act(async () => {
+        retry.click();
+      });
+      await flushQuote();
+    }
+    const after = mockReceiveFor.mock.calls.slice(callsBefore);
+    expect(after.every((call: any) => Number(call[0]?.amount) !== 0.1)).toBe(true);
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
   it('invokes Retry after a generic error', async () => {
     mockReceiveFor
       .mockRejectedValueOnce({ statusCode: 500, message: 'boom' })

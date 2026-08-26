@@ -426,7 +426,7 @@ export default function SwapScreen(): JSX.Element {
       address: selectedAddress,
     });
 
-    data && setValidatedData({ ...data, sideToUpdate });
+    setValidatedData(data ? { ...data, sideToUpdate } : undefined);
   }
 
   useEffect(() => {

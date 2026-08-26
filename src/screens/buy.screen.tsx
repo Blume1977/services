@@ -516,7 +516,7 @@ export default function BuyScreen(): JSX.Element {
       paymentMethod: selectedPaymentMethod,
     });
 
-    data && setValidatedData({ ...data, sideToUpdate });
+    setValidatedData(data ? { ...data, sideToUpdate } : undefined);
   }
 
   const hasCompleteSpendSide = Boolean(selectedAmount && selectedCurrency && selectedPaymentMethod);

@@ -1071,6 +1071,33 @@ describe('BuyScreen cleared amount protection', () => {
     },
   );
 
+  it('does not retry a quote after the spend amount becomes invalid', async () => {
+    mockPersonalIban.mockReturnValue(undefined);
+    mockUseAppParams.mockReturnValue(baseAppParams());
+    mockReceiveFor
+      .mockRejectedValueOnce({ statusCode: 500, message: 'boom' })
+      .mockImplementation((req: any) => Promise.resolve(quoteFor(req)));
+    render(<BuyScreen />);
+    await settle(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('boom'));
+    const callsBefore = mockReceiveFor.mock.calls.length;
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0' } });
+    });
+    await settle(() => expect(screen.getByTestId('input-amount')).toHaveValue('0'));
+    const retry = screen.queryByRole('button', { name: 'Retry' });
+    if (retry) {
+      await act(async () => {
+        retry.click();
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(500);
+      });
+    }
+    const after = mockReceiveFor.mock.calls.slice(callsBefore);
+    expect(after.every((call: any) => Number(call[0]?.amount) !== 300)).toBe(true);
+    expect(screen.queryByTestId('payment-info')).not.toBeInTheDocument();
+  });
+
   it('shows a generic error and retries', async () => {
     mockPersonalIban.mockReturnValue(undefined);
     mockUseAppParams.mockReturnValue(baseAppParams());

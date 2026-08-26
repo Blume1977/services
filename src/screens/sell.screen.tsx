@@ -374,7 +374,7 @@ export default function SellScreen(): JSX.Element {
       bankAccount: selectedBankAccount,
     });
 
-    data && setValidatedData({ ...data, sideToUpdate });
+    setValidatedData(data ? { ...data, sideToUpdate } : undefined);
   }
 
   useEffect(() => {
