@@ -225,6 +225,7 @@ export default function SellScreen(): JSX.Element {
     } else if (
       selectedAsset &&
       !enteredAmount &&
+      !selectedTargetAmount &&
       !spendClearedByUserRef.current &&
       !targetClearedByUserRef.current
     ) {

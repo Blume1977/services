@@ -263,6 +263,7 @@ export default function SwapScreen(): JSX.Element {
     } else if (
       selectedSourceAsset &&
       !enteredAmount &&
+      !selectedTargetAmount &&
       !spendClearedByUserRef.current &&
       !targetClearedByUserRef.current
     ) {

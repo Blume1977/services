@@ -1217,6 +1217,7 @@ describe('SwapScreen', () => {
       screen.getByTestId('select-sourceAsset-BTC').click();
     });
     await flushQuote();
+    expect(screen.getByTestId('input-amount')).toHaveValue('');
     expect(mockReceiveFor.mock.calls.some((call: any) => String(call[0].targetAmount) === '0.01')).toBe(true);
   });
 
