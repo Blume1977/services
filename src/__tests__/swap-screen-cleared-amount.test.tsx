@@ -1164,7 +1164,7 @@ describe('SwapScreen', () => {
     expect(after.every((call: any) => String(call[0].amount) === '0.2')).toBe(true);
   });
 
-  it('falls back to the target side after spend is cleared and the source asset changes', async () => {
+  it('keeps leftover target and does not quote after spend is cleared and the source asset changes', async () => {
     render(<SwapScreen />);
     await flushQuote();
     const targetBefore = (screen.getByTestId('input-targetAmount') as HTMLInputElement).value;
@@ -1173,11 +1173,14 @@ describe('SwapScreen', () => {
       fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '' } });
     });
     await flushQuote();
+    const callsBefore = mockReceiveFor.mock.calls.length;
     await act(async () => {
       screen.getByTestId('select-sourceAsset-BTC').click();
     });
     await flushQuote();
     expect(screen.getByTestId('input-amount')).toHaveValue('');
+    expect(screen.getByTestId('input-targetAmount')).toHaveValue(targetBefore);
+    expect(mockReceiveFor.mock.calls.slice(callsBefore)).toEqual([]);
   });
 
   it('skips the exact-price request when the first quote is empty', async () => {
