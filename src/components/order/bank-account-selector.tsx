@@ -35,6 +35,16 @@ export const BankAccountSelector: React.FC<BankAccountSelectorProps> = ({
 
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const requestedCreateIbanRef = useRef<string>();
+  const bankAccountLiveRef = useRef(bankAccount);
+  const mountedRef = useRef(true);
+  bankAccountLiveRef.current = bankAccount;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!bankAccounts) return;
@@ -59,12 +69,18 @@ export const BankAccountSelector: React.FC<BankAccountSelectorProps> = ({
       requestedCreateIbanRef.current !== bankAccount &&
       Validations.Iban(allowedCountries).validate(bankAccount) === true
     ) {
-      requestedCreateIbanRef.current = bankAccount;
+      const requestedIban = bankAccount;
+      requestedCreateIbanRef.current = requestedIban;
       setIsCreatingAccount(true);
-      createAccount({ iban: bankAccount })
-        .then((b) => onChange(b))
+      createAccount({ iban: requestedIban })
+        .then((b) => {
+          if (!mountedRef.current || bankAccountLiveRef.current !== requestedIban) return;
+          onChange(b);
+        })
         .catch(() => undefined)
-        .finally(() => setIsCreatingAccount(false));
+        .finally(() => {
+          if (mountedRef.current) setIsCreatingAccount(false);
+        });
     }
   }, [bankAccount, getAccount, bankAccounts, allowedCountries, value, onChange, isCreatingAccount, createAccount]);
 

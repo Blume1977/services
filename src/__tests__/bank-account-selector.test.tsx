@@ -233,6 +233,75 @@ describe('BankAccountSelector', () => {
     expect(mockOnChange).not.toHaveBeenCalled();
   });
 
+  it('does not apply a create result after the bank-account param has changed', async () => {
+    let resolveCreate: (value: unknown) => void = () => undefined;
+    mockBankAccounts = [];
+    mockBankAccountParam = 'DE89370400440532013000';
+    mockGetAccount.mockReturnValue(undefined);
+    mockCreateAccount.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const { rerender } = render(
+      <BankAccountSelector
+        placeholder="IBAN"
+        isModalOpen={false}
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockCreateAccount).toHaveBeenCalledTimes(1);
+    mockBankAccountParam = undefined;
+    rerender(
+      <BankAccountSelector
+        placeholder="IBAN"
+        isModalOpen={false}
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    await act(async () => {
+      resolveCreate({ id: 2, iban: 'DE89370400440532013000' });
+      await Promise.resolve();
+    });
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('does not apply a create result after unmount', async () => {
+    let resolveCreate: (value: unknown) => void = () => undefined;
+    mockBankAccounts = [];
+    mockBankAccountParam = 'DE89370400440532013000';
+    mockGetAccount.mockReturnValue(undefined);
+    mockCreateAccount.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const { unmount } = render(
+      <BankAccountSelector
+        placeholder="IBAN"
+        isModalOpen={false}
+        onChange={mockOnChange}
+        onModalToggle={mockOnModalToggle}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    unmount();
+    await act(async () => {
+      resolveCreate({ id: 2, iban: 'DE89370400440532013000' });
+      await Promise.resolve();
+    });
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
   it('does not retry create after createAccount rejects', async () => {
     mockBankAccountParam = 'DE89370400440532013000';
     mockGetAccount.mockReturnValue(undefined);
