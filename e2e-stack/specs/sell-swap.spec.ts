@@ -546,6 +546,35 @@ test.describe('Sell + Swap e2e', () => {
     }
   });
 
+  test('/sell: native form submit completes the transaction', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSellFullUiFlow(page, 'sell-form-submit');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+    const form = page.locator('form').first();
+    await expect(form).toBeVisible();
+    await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
+    await expect(
+      page.getByText('Nice! You are all set! Give us a minute to handle your transaction.'),
+    ).toBeVisible({ timeout: 15000 });
+  });
+
+  test('/sell: native form submit does not complete after spend is cleared', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSellFullUiFlow(page, 'sell-form-submit-cleared');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+    const spend = page.locator('h2', { hasText: 'You spend' }).locator('..').locator('input[type="number"]').first();
+    await spend.click();
+    await spend.fill('');
+    await spend.blur();
+    await expect.poll(async () => spend.inputValue(), { timeout: 8000 }).toBe('');
+    const form = page.locator('form').first();
+    await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
+    await expect(page.getByText(/Nice! You are all set!/i)).toHaveCount(0);
+    await expect(spend).toHaveValue('');
+  });
+
   test('/sell: clearing the spend amount keeps the field empty (no cross-side refill)', async ({ page }) => {
     test.setTimeout(90000);
     await setupSellFullUiFlow(page, 'sell-clear-spend');
@@ -792,6 +821,35 @@ test.describe('Sell + Swap e2e', () => {
         page.getByText('Nice! You are all set! Give us a minute to handle your transaction.'),
       ).toBeVisible({ timeout: 15000 });
     }
+  });
+
+  test('/swap: native form submit completes the transaction', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSwapFullUiFlow(page, 'swap-form-submit');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+    const form = page.locator('form').first();
+    await expect(form).toBeVisible();
+    await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
+    await expect(
+      page.getByText('Nice! You are all set! Give us a minute to handle your transaction.'),
+    ).toBeVisible({ timeout: 15000 });
+  });
+
+  test('/swap: native form submit does not complete after spend is cleared', async ({ page }) => {
+    test.setTimeout(90000);
+    await setupSwapFullUiFlow(page, 'swap-form-submit-cleared');
+    const outcome = await waitForPricingOutcome(page, { timeoutMs: 25000 });
+    expect(outcome.kind).toBe('payment_info');
+    const spend = page.locator('h2', { hasText: 'You spend' }).locator('..').locator('input[type="number"]').first();
+    await spend.click();
+    await spend.fill('');
+    await spend.blur();
+    await expect.poll(async () => spend.inputValue(), { timeout: 8000 }).toBe('');
+    const form = page.locator('form').first();
+    await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
+    await expect(page.getByText(/Nice! You are all set!/i)).toHaveCount(0);
+    await expect(spend).toHaveValue('');
   });
 
   test('/swap: clearing the spend amount keeps the field empty (no cross-side refill)', async ({ page }) => {

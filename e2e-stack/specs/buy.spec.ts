@@ -559,6 +559,39 @@ test.describe('Buy flow', () => {
     await expect(page.getByText(/Nice! You are all set!/i)).toBeVisible({ timeout: 15000 });
   });
 
+  async function submitBuyForm(page: Page): Promise<void> {
+    const form = page.locator('form').first();
+    await expect(form).toBeVisible();
+    await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
+  }
+
+  test('/buy: native form submit confirms a final quote', async ({ page }) => {
+    test.setTimeout(90000);
+    await openChfEthAmountIn(page, 'buy-form-submit', '100');
+    expect(await waitForQuoteUi(page, 45000)).toBe('payment');
+    // Payment Information can appear before the exact-price quote is final; confirm()
+    // no-ops until then. The CTA is disabled until isQuoteFinal — wait for that, same
+    // as the click path.
+    const confirmBtn = page.getByRole('button', { name: /Click here once you have issued the transfer/i });
+    await expect(confirmBtn).toBeEnabled();
+
+    await submitBuyForm(page);
+    await expect(page.getByText(/Nice! You are all set!/i)).toBeVisible({ timeout: 15000 });
+  });
+
+  test('/buy: native form submit does not confirm after spend is cleared', async ({ page }) => {
+    test.setTimeout(90000);
+    await openChfEthAmountIn(page, 'buy-form-submit-cleared', '100');
+    expect(await waitForQuoteUi(page, 45000)).toBe('payment');
+
+    await clearNumberInput(spendAmountInput(page));
+    await expect.poll(async () => spendAmountInput(page).inputValue(), { timeout: 8000 }).toBe('');
+
+    await submitBuyForm(page);
+    await expect(page.getByText(/Nice! You are all set!/i)).toHaveCount(0);
+    await expect(spendAmountInput(page)).toHaveValue('');
+  });
+
   async function openChfEthAmountIn(page: Page, tag: string, amountIn: string) {
     await openQuoteCapableBuy(page, tag);
     await page.goto(`/buy?asset-in=CHF&asset-out=ETH&amount-in=${amountIn}&blockchain=Ethereum`);
