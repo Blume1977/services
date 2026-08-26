@@ -339,8 +339,11 @@ export default function SwapScreen(): JSX.Element {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
       quoteGeneration.current += 1;
       isExactPriceWriteRef.current = false;
+      setIsQuoteFinal(false);
     } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
+      setIsQuoteFinal(false);
+      setPaymentInfo(undefined);
     }
 
     if (requiresUpdate) {
@@ -385,8 +388,11 @@ export default function SwapScreen(): JSX.Element {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) {
       quoteGeneration.current += 1;
       isExactPriceWriteRef.current = false;
+      setIsQuoteFinal(false);
     } else if (requiresUpdate && !exactPriceWrite) {
       quoteGeneration.current += 1;
+      setIsQuoteFinal(false);
+      setPaymentInfo(undefined);
     }
 
     if (requiresUpdate) {

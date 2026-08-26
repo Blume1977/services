@@ -869,6 +869,20 @@ describe('SwapScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/connect', { setRedirect: true });
   });
 
+  it('does not complete from form submit after the spend amount changes before the new quote', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SwapScreen />);
+    await flushQuote();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('input-amount'), { target: { value: '0.2' } });
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('swap-completion')).not.toBeInTheDocument();
+  });
+
   it('does not complete from form submit while the quote is not final', async () => {
     mockCanSendTransaction.mockReturnValue(false);
     mockReceiveFor.mockImplementation((req: any) => {

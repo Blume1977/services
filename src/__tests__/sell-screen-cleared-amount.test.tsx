@@ -425,6 +425,21 @@ describe('SellScreen', () => {
     expect(screen.getByTestId('payment-info')).toBeInTheDocument();
   });
 
+  it('does not complete from form submit after the bank account changes before the new quote', async () => {
+    mockCanSendTransaction.mockReturnValue(false);
+    render(<SellScreen />);
+    await flushQuote();
+    expect(screen.getByTestId('payment-info')).toBeInTheDocument();
+    await act(async () => {
+      screen.getByTestId('bank-account-alt').click();
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-submit').closest('form') as HTMLFormElement);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('sell-completion')).not.toBeInTheDocument();
+  });
+
   it('does not treat a no-op exact-price spend write as a user edit', async () => {
     render(<SellScreen />);
     await flushQuote();
