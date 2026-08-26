@@ -128,6 +128,7 @@ export default function SwapScreen(): JSX.Element {
   const [kycError, setKycError] = useState<TransactionError>();
   const [isLoading, setIsLoading] = useState<Side>();
   const [paymentInfo, setPaymentInfo] = useState<Swap>();
+  const [isQuoteFinal, setIsQuoteFinal] = useState(false);
   const [balances, setBalances] = useState<AssetBalance[]>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTxDone, setTxDone] = useState<boolean>(false);
@@ -427,6 +428,7 @@ export default function SwapScreen(): JSX.Element {
     setErrorMessage(undefined);
     setKycError(undefined);
     setPaymentInfo(undefined);
+    setIsQuoteFinal(false);
     setIsLoading(undefined);
 
     if (!validatedData) return;
@@ -464,6 +466,7 @@ export default function SwapScreen(): JSX.Element {
           }
         }
         setPaymentInfo(info);
+        setIsQuoteFinal(true);
       })
       .catch((error: ApiError) => {
         if (!isRunning || generation !== quoteGeneration.current) return;
@@ -471,6 +474,7 @@ export default function SwapScreen(): JSX.Element {
           navigate('/profile');
         } else {
           setPaymentInfo(undefined);
+          setIsQuoteFinal(false);
           const kycErrorFromMessage = getKycErrorFromMessage(error.message);
           if (kycErrorFromMessage) {
             setKycError(kycErrorFromMessage);
@@ -600,7 +604,8 @@ export default function SwapScreen(): JSX.Element {
 
   function onSubmit(_data?: FormData) {
     if (spendClearedByUserRef.current || targetClearedByUserRef.current) return;
-    if (!paymentInfo || kycError || errorMessage || customAmountError?.hideInfos || isProcessing) return;
+    if (!paymentInfo || !isQuoteFinal || kycError || errorMessage || customAmountError?.hideInfos || isProcessing)
+      return;
     if (
       (selectedSourceAsset?.category === AssetCategory.PRIVATE ||
         selectedTargetAsset?.category === AssetCategory.PRIVATE) &&
@@ -877,6 +882,7 @@ export default function SwapScreen(): JSX.Element {
                                 : 'Click here once you have issued the transaction',
                             )}
                             onClick={() => onSubmit()}
+                            disabled={!isQuoteFinal}
                             caps={false}
                             className="mt-4"
                             isLoading={isProcessing}

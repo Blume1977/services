@@ -556,7 +556,7 @@ test.describe('Sell + Swap e2e', () => {
     const completeBtn = page.getByRole('button', {
       name: /Click here once you have issued the transaction/i,
     });
-    await expect(completeBtn).toBeVisible();
+    await expect(completeBtn).toBeEnabled();
     const form = page.locator('form').first();
     await expect(form).toBeVisible();
     await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
@@ -837,7 +837,7 @@ test.describe('Sell + Swap e2e', () => {
     const completeBtn = page.getByRole('button', {
       name: /Click here once you have issued the transaction/i,
     });
-    await expect(completeBtn).toBeVisible();
+    await expect(completeBtn).toBeEnabled();
     const form = page.locator('form').first();
     await expect(form).toBeVisible();
     await form.evaluate((el) => (el as HTMLFormElement).requestSubmit());
