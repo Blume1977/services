@@ -218,7 +218,7 @@ test.describe('Compliance review KYC and AML actions', () => {
     expect(unexpectedRequests).toEqual([]);
   });
 
-  test('shows the pending ManualCheck decision form and Reset hint', async ({ page }) => {
+  test('shows the pending ManualCheck Fail and Reset decision variants', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1200 });
 
     const pendingFixture = structuredClone(complianceFixture);
@@ -250,12 +250,16 @@ test.describe('Compliance review KYC and AML actions', () => {
     await page.goto(`/compliance/user/${USER_DATA_ID}/kyc?session=${jwt()}&tab=amlPending`);
 
     await expect(page.getByText('AmlCheck', { exact: true })).toBeVisible();
+
+    await page.locator('select').first().selectOption('Fail');
+
     await expect(page.getByText('AmlReason', { exact: true })).toBeVisible();
     await expect(page.getByText('priceDefinitionAllowedDate setzen')).toBeVisible();
+    await expect(page.getByText(/Reset entfernt AmlCheck, AmlReason und priceDefinitionAllowedDate/)).toHaveCount(0);
 
     await page.getByText('AmlCheck', { exact: true }).scrollIntoViewIfNeeded();
 
-    await expect(page).toHaveScreenshot('compliance-review-aml-pending-decision.png', {
+    await expect(page).toHaveScreenshot('compliance-review-aml-pending-fail.png', {
       fullPage: true,
       maxDiffPixels: 5000,
     });
@@ -264,6 +268,7 @@ test.describe('Compliance review KYC and AML actions', () => {
 
     await expect(page.getByText(/Reset entfernt AmlCheck, AmlReason und priceDefinitionAllowedDate/)).toBeVisible();
     await expect(page.getByText('priceDefinitionAllowedDate setzen')).toHaveCount(0);
+    await expect(page.getByText('AmlReason', { exact: true })).toHaveCount(0);
 
     await page.getByText(/Reset entfernt AmlCheck, AmlReason und priceDefinitionAllowedDate/).scrollIntoViewIfNeeded();
 

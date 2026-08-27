@@ -149,8 +149,9 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   fixture with `{ userData: { verifiedName } }`. A green run proves that the review screen
   accepts that name, not that the API returns the logged-in staff member's `verifiedName`.
   The spec covers the resettable AML-reset path and the pending ManualCheck decision form
-  (inputs versus Reset hint). A green run does not prove live API payloads or that the
-  Editor label is the logged-in staff member's `verifiedName`.
+  in the Fail (fields visible) and Reset (hint, fields hidden) variants. A green run does
+  not prove live API payloads or that the Editor label is the logged-in staff member's
+  `verifiedName`.
 - **The call-queue outcome spec answers staff identity and the dossier itself.**
   `e2e/compliance-call-queue-outcome.spec.ts` fulfils `GET /v1/support/issue/clerk` with
   `{ clerk }`, a differently named fallback on `GET /v1/support/{staffAccount}`,
