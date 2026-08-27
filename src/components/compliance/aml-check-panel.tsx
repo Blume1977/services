@@ -67,7 +67,9 @@ function TransactionEntry({
   const [isProcessing, setIsProcessing] = useState(false);
   // Reset clears amlCheck, amlReason and priceDefinitionAllowedDate on the API side and hands the
   // transaction back to the automatic AML run, so the decision inputs below carry no meaning for it.
+  // Fail never sets priceDefinitionAllowedDate (backend uses that field for Pass / payout price definition).
   const isReset = amlCheck === 'Reset';
+  const isFail = amlCheck === CheckStatus.FAIL;
 
   async function handleSave(signedBy: string): Promise<void> {
     // Fail-closed client guard; API rejects Pass for non-Admin regardless.
@@ -81,7 +83,8 @@ function TransactionEntry({
           {
             amlCheck,
             amlReason,
-            priceDefinitionAllowedDate: setPriceDate ? new Date().toISOString() : undefined,
+            priceDefinitionAllowedDate:
+              setPriceDate && amlCheck !== CheckStatus.FAIL ? new Date().toISOString() : undefined,
           },
           signedBy,
         );
@@ -219,15 +222,17 @@ function TransactionEntry({
                   ))}
                 </select>
               </div>
-              <div className="flex items-center justify-between px-3 py-2 border-b border-dfxGray-300 last:border-0">
-                <span className="text-sm text-dfxBlue-800">priceDefinitionAllowedDate setzen</span>
-                <input
-                  type="checkbox"
-                  checked={setPriceDate}
-                  onChange={(e) => setSetPriceDate(e.target.checked)}
-                  className="rounded"
-                />
-              </div>
+              {!isFail && (
+                <div className="flex items-center justify-between px-3 py-2 border-b border-dfxGray-300 last:border-0">
+                  <span className="text-sm text-dfxBlue-800">priceDefinitionAllowedDate setzen</span>
+                  <input
+                    type="checkbox"
+                    checked={setPriceDate}
+                    onChange={(e) => setSetPriceDate(e.target.checked)}
+                    className="rounded"
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

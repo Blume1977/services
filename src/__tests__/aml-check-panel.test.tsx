@@ -379,28 +379,74 @@ describe('AmlCheckPendingPanel pending decision form', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     fireEvent.change(amlCheckSelect(), { target: { value: 'Fail' } });
-    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getAllByRole('combobox')).toHaveLength(2);
     expect(screen.queryByText(/Reset entfernt AmlCheck/)).not.toBeInTheDocument();
   });
 
-  it('saves Fail with the chosen AmlReason and a priceDefinitionAllowedDate when ticked', async () => {
+  it('hides priceDefinitionAllowedDate for Fail but keeps AmlReason', () => {
+    renderPanel();
+
+    fireEvent.change(amlCheckSelect(), { target: { value: 'Fail' } });
+
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('priceDefinitionAllowedDate setzen')).not.toBeInTheDocument();
+  });
+
+  it('saves Fail with the chosen AmlReason and without a priceDefinitionAllowedDate', async () => {
     const onUpdate = jest.fn().mockResolvedValue(undefined);
     const onReset = jest.fn().mockResolvedValue(undefined);
     const { props } = renderPanel({}, { onUpdate, onReset });
 
     fireEvent.change(amlCheckSelect(), { target: { value: 'Fail' } });
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'NA' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate).toHaveBeenCalledWith(
+      props.data.transactions[0],
+      { amlCheck: 'Fail', amlReason: 'NA', priceDefinitionAllowedDate: undefined },
+      'Alice',
+    );
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it('drops a previously ticked priceDefinitionAllowedDate when saving as Fail', async () => {
+    const onUpdate = jest.fn().mockResolvedValue(undefined);
+    renderPanel({}, { onUpdate });
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(amlCheckSelect(), { target: { value: 'Fail' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0][1]).toEqual({
+      amlCheck: 'Fail',
+      amlReason: 'ManualCheck',
+      priceDefinitionAllowedDate: undefined,
+    });
+  });
+
+  it('saves Pass with a priceDefinitionAllowedDate when Admin ticks the checkbox', async () => {
+    mockAuth.session = { role: 'Admin' };
+    const onUpdate = jest.fn().mockResolvedValue(undefined);
+    const { props } = renderPanel({}, { onUpdate });
+
+    fireEvent.change(amlCheckSelect(), { target: { value: 'Pass' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
     expect(onUpdate).toHaveBeenCalledWith(
       props.data.transactions[0],
-      { amlCheck: 'Fail', amlReason: 'NA', priceDefinitionAllowedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+      {
+        amlCheck: 'Pass',
+        amlReason: 'ManualCheck',
+        priceDefinitionAllowedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
       'Alice',
     );
-    expect(onReset).not.toHaveBeenCalled();
   });
 
   it('saves without a priceDefinitionAllowedDate when the checkbox stays unticked', async () => {

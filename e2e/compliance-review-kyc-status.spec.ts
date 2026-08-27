@@ -254,7 +254,7 @@ test.describe('Compliance review KYC and AML actions', () => {
     await page.locator('select').first().selectOption('Fail');
 
     await expect(page.getByText('AmlReason', { exact: true })).toBeVisible();
-    await expect(page.getByText('priceDefinitionAllowedDate setzen')).toBeVisible();
+    await expect(page.getByText('priceDefinitionAllowedDate setzen')).toHaveCount(0);
     await expect(page.getByText(/Reset entfernt AmlCheck, AmlReason und priceDefinitionAllowedDate/)).toHaveCount(0);
 
     await page.getByText('AmlCheck', { exact: true }).scrollIntoViewIfNeeded();
