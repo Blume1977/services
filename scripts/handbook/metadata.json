@@ -77,7 +77,7 @@
   },
   "compliance-review-kyc-status": {
     "title": "Compliance KYC-Status",
-    "description": "KYC-Status und AML-Reset in der Compliance-Review."
+    "description": "KYC-Status und AML-Reset in der Compliance-Review sowie das ausstehende ManualCheck-Entscheidungsformular mit den Varianten Entscheidungsfelder und Reset-Hinweis."
   },
   "compliance-bank-tx-unassigned": {
     "title": "Compliance: Unzugeordnete Bankeingänge",

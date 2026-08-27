@@ -24,7 +24,7 @@ jest.mock('src/hooks/navigation.hook', () => ({
 }));
 
 jest.mock('src/hooks/staff-verified-name.hook', () => ({
-  useStaffVerifiedName: () => ({ name: 'Alice', isLoading: false }),
+  useStaffVerifiedName: () => mockStaffName,
 }));
 
 jest.mock('src/components/error-hint', () => {
@@ -41,6 +41,10 @@ import { AmlCheckPendingPanel } from 'src/components/compliance/aml-check-panel'
 import { ComplianceUserData, TransactionInfo } from 'src/hooks/compliance.hook';
 
 const mockNavigate = jest.fn();
+const mockStaffName: { name: string | undefined; isLoading: boolean } = {
+  name: 'Alice',
+  isLoading: false,
+};
 
 const buyCrypto: TransactionInfo = {
   id: 326324,
@@ -90,6 +94,8 @@ const data = {
 describe('AmlCheckPendingPanel AML reset', () => {
   beforeEach(() => {
     mockAuth.session = { role: 'Compliance' };
+    mockStaffName.name = 'Alice';
+    mockStaffName.isLoading = false;
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -315,9 +321,26 @@ describe('AmlCheckPendingPanel pending decision form', () => {
   beforeEach(() => {
     mockAuth.session = { role: 'Compliance' };
     mockNavigate.mockReset();
+    mockStaffName.name = 'Alice';
+    mockStaffName.isLoading = false;
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('disables saving while the clerk name is loading', () => {
+    mockStaffName.isLoading = true;
+    renderPanel();
+
+    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled();
+  });
+
+  it('disables saving when the clerk name is missing', () => {
+    mockStaffName.isLoading = false;
+    mockStaffName.name = undefined;
+    renderPanel();
+
+    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled();
+  });
 
   it('hides AmlReason and priceDefinitionAllowedDate once Reset is selected and saves through onReset', async () => {
     const onReset = jest.fn().mockResolvedValue(undefined);
@@ -579,6 +602,11 @@ describe('AmlCheckPendingPanel pending decision form', () => {
 });
 
 describe('AmlCheckPendingPanel review reset entry', () => {
+  beforeEach(() => {
+    mockStaffName.name = 'Alice';
+    mockStaffName.isLoading = false;
+  });
+
   afterEach(() => jest.restoreAllMocks());
 
   it('shows the processing state while the review reset is running', async () => {
