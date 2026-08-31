@@ -198,7 +198,7 @@ export function computeStatistics(
     byType.set(i.type, e);
   }
   const resolutionByType = Array.from(byType.entries())
-    .map(([key, v]) => ({ key, avgHours: v.count > 0 ? v.sum / v.count : 0, count: v.count }))
+    .map(([key, v]) => ({ key, avgHours: v.sum / v.count, count: v.count }))
     .sort((a, b) => b.count - a.count);
   const avgResolutionHours =
     resolved.length > 0 ? resolved.reduce((sum, i) => sum + resolutionHours(i), 0) / resolved.length : 0;

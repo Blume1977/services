@@ -67,6 +67,7 @@ test.describe('Support Dashboard - Visual Regression Tests', () => {
 
     // Verify the dashboard loaded
     await expect(page.getByText('Open Issues')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Limit Requests \(/ })).toBeVisible();
 
     await expect(page).toHaveScreenshot('support-dashboard-01-overview.png', {
       fullPage: true,
