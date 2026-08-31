@@ -50,6 +50,43 @@ export function formatElapsed(hours: number): string {
   return rest > 0 ? `${days}d ${rest}h` : `${days}d`;
 }
 
+// --- Open-ticket grouping ---
+
+// Mirrors SupportIssueInternalState.CREATED / PENDING (kept as literals: this module has no
+// @dfx.swiss/react dependency).
+export const OpenIssueState = { created: 'Created', pending: 'Pending' } as const;
+
+export interface OpenIssueGroups {
+  customerWaiting: SupportIssueListItem[];
+  created: SupportIssueListItem[];
+  pending: SupportIssueListItem[];
+}
+
+// Splits an open-ticket list into the three dashboard sections: tickets whose last message came
+// from the customer first (newest customer message on top), then the remaining Created and
+// Pending tickets (newest created on top). An optional state filter narrows the list beforehand.
+export function groupOpenIssues(issues: SupportIssueListItem[], stateFilter = ''): OpenIssueGroups {
+  const filtered = stateFilter ? issues.filter((i) => i.state === stateFilter) : issues;
+
+  const customerWaiting = filtered
+    .filter((i) => i.lastMessageAuthor === CustomerAuthor)
+    .sort((a, b) => new Date(b.lastMessageDate ?? 0).getTime() - new Date(a.lastMessageDate ?? 0).getTime());
+
+  const rest = filtered.filter((i) => i.lastMessageAuthor !== CustomerAuthor);
+  const byCreated = (a: SupportIssueListItem, b: SupportIssueListItem): number =>
+    new Date(b.created).getTime() - new Date(a.created).getTime();
+
+  return {
+    customerWaiting,
+    created: rest.filter((i) => i.state === OpenIssueState.created).sort(byCreated),
+    pending: rest.filter((i) => i.state === OpenIssueState.pending).sort(byCreated),
+  };
+}
+
+export function countOpenIssueGroups(groups: OpenIssueGroups): number {
+  return groups.customerWaiting.length + groups.created.length + groups.pending.length;
+}
+
 // --- Statistics ---
 
 export type StatGranularity = 'day' | 'month';

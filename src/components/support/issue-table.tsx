@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { useSettingsContext } from 'src/contexts/settings.context';
 import { CustomerAuthor, SupportIssueListItem } from 'src/hooks/support-dashboard.hook';
 import { formatDateTime, statusBadge } from 'src/util/compliance-helpers';
+import type { OpenIssueGroups } from 'src/util/support-stats';
 import { reasonLabel, typeLabel } from 'src/util/support-helpers';
 
 // Presentational support-issue table components, extracted verbatim from support-dashboard.screen.tsx so both the
@@ -60,11 +61,7 @@ export function FilterSelect({
   );
 }
 
-export interface IssueGroups {
-  customerWaiting: SupportIssueListItem[];
-  created: SupportIssueListItem[];
-  pending: SupportIssueListItem[];
-}
+export type IssueGroups = OpenIssueGroups;
 
 const COLUMN_COUNT = 9;
 

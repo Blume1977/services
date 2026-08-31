@@ -1,5 +1,13 @@
 import type { SupportIssueListItem } from '../hooks/support-dashboard.hook';
-import { computeStatistics, customerWaitingHours, granularityFor, trendLabel, waitTier } from '../util/support-stats';
+import {
+  computeStatistics,
+  countOpenIssueGroups,
+  customerWaitingHours,
+  granularityFor,
+  groupOpenIssues,
+  trendLabel,
+  waitTier,
+} from '../util/support-stats';
 
 const NOW = new Date('2026-06-18T12:00:00Z');
 
@@ -101,5 +109,60 @@ describe('support-helpers trendLabel', () => {
     expect(trendLabel('2026-06', 'month', 'en-US')).toBe('Jun');
     expect(trendLabel('2026-06', 'month', 'fr-FR')).toBe('juin');
     expect(trendLabel('2026-06', 'month', 'it-IT')).toBe('giu');
+  });
+});
+
+describe('support-helpers groupOpenIssues', () => {
+  const issue = (overrides: Partial<SupportIssueListItem>): SupportIssueListItem => ({
+    id: 1,
+    uid: 'I1',
+    type: 'LimitRequest',
+    reason: 'Other',
+    state: 'Created',
+    name: 'Test',
+    created: '2026-08-30T10:00:00Z',
+    messageCount: 1,
+    ...overrides,
+  });
+
+  it('puts customer-waiting tickets first, newest customer message on top, regardless of state', () => {
+    const groups = groupOpenIssues([
+      issue({ id: 1, state: 'Pending', lastMessageAuthor: 'Customer', lastMessageDate: '2026-08-30T11:00:00Z' }),
+      issue({ id: 2, state: 'Created', lastMessageAuthor: 'Customer', lastMessageDate: '2026-08-31T09:00:00Z' }),
+      issue({ id: 3, state: 'Created', lastMessageAuthor: 'Jana' }),
+    ]);
+
+    expect(groups.customerWaiting.map((i) => i.id)).toEqual([2, 1]);
+    expect(groups.created.map((i) => i.id)).toEqual([3]);
+    expect(groups.pending).toEqual([]);
+    expect(countOpenIssueGroups(groups)).toBe(3);
+  });
+
+  it('splits the rest into Created and Pending, newest created on top', () => {
+    const groups = groupOpenIssues([
+      issue({ id: 1, state: 'Pending', created: '2026-08-28T10:00:00Z', lastMessageAuthor: 'Jana' }),
+      issue({ id: 2, state: 'Pending', created: '2026-08-30T10:00:00Z', lastMessageAuthor: 'Jana' }),
+      issue({ id: 3, state: 'Created', created: '2026-08-29T10:00:00Z' }),
+    ]);
+
+    expect(groups.customerWaiting).toEqual([]);
+    expect(groups.created.map((i) => i.id)).toEqual([3]);
+    expect(groups.pending.map((i) => i.id)).toEqual([2, 1]);
+  });
+
+  it('applies the state filter before grouping, also to customer-waiting tickets', () => {
+    const groups = groupOpenIssues(
+      [
+        issue({ id: 1, state: 'Pending', lastMessageAuthor: 'Customer', lastMessageDate: '2026-08-30T11:00:00Z' }),
+        issue({ id: 2, state: 'Created', lastMessageAuthor: 'Customer', lastMessageDate: '2026-08-31T09:00:00Z' }),
+        issue({ id: 3, state: 'Created' }),
+      ],
+      'Created',
+    );
+
+    expect(groups.customerWaiting.map((i) => i.id)).toEqual([2]);
+    expect(groups.created.map((i) => i.id)).toEqual([3]);
+    expect(groups.pending).toEqual([]);
+    expect(countOpenIssueGroups(groups)).toBe(2);
   });
 });
