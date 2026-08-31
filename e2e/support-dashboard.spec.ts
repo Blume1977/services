@@ -74,4 +74,17 @@ test.describe('Support Dashboard - Visual Regression Tests', () => {
       maxDiffPixels: 5000,
     });
   });
+
+  test('renders the Limit Requests tab', async ({ page }) => {
+    await page.goto(`/support/dashboard/all?session=${token}`);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: /^Limit Requests \(/ })).toBeVisible();
+    await page.getByRole('button', { name: /^Limit Requests \(/ }).click();
+    await page.waitForTimeout(1000);
+
+    await expect(page).toHaveScreenshot('support-dashboard-02-limit-requests.png', {
+      fullPage: true,
+      maxDiffPixels: 5000,
+    });
+  });
 });
