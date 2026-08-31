@@ -295,9 +295,15 @@ describe('groupOpenIssues', () => {
   it('puts a customer-authored ticket without lastMessageDate into customerWaiting', () => {
     const groups = groupOpenIssues([
       issue({ id: 9, state: 'Pending', lastMessageAuthor: 'Customer', lastMessageDate: undefined }),
+      issue({
+        id: 10,
+        state: 'Created',
+        lastMessageAuthor: 'Customer',
+        lastMessageDate: '2026-08-31T09:00:00Z',
+      }),
     ]);
 
-    expect(groups.customerWaiting.map((i) => i.id)).toEqual([9]);
+    expect(groups.customerWaiting.map((i) => i.id)).toEqual([10, 9]);
     expect(groups.created).toEqual([]);
     expect(groups.pending).toEqual([]);
   });

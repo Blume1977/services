@@ -720,6 +720,7 @@ describe('SupportDashboardScreen', () => {
     expect(searchButton).toBeDisabled();
     fireEvent.click(searchButton);
     fireEvent.keyDown(customerInput, { key: 'Enter' });
+    fireEvent.keyDown(customerInput, { key: 'Tab' });
     expect(mockSearchCustomers).not.toHaveBeenCalled();
 
     mockSearchCustomers.mockResolvedValueOnce({
@@ -730,7 +731,10 @@ describe('SupportDashboardScreen', () => {
     });
     fireEvent.change(customerInput, { target: { value: '  ada  ' } });
     fireEvent.click(searchButton);
-    await waitFor(() => expect(mockSearchCustomers).toHaveBeenCalledWith('ada'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockSearchCustomers).toHaveBeenCalledWith('ada');
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByText('a@b.c')).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
@@ -741,17 +745,26 @@ describe('SupportDashboardScreen', () => {
     mockSearchCustomers.mockResolvedValueOnce({ userDatas: [] });
     fireEvent.change(customerInput, { target: { value: 'nobody' } });
     fireEvent.keyDown(customerInput, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByText('No entries found')).toBeInTheDocument());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText('No entries found')).toBeInTheDocument();
 
     mockSearchCustomers.mockRejectedValueOnce(new Error('search failed'));
     fireEvent.change(customerInput, { target: { value: 'err' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await waitFor(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('search failed'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('search failed');
 
     mockSearchCustomers.mockRejectedValueOnce({});
     fireEvent.change(customerInput, { target: { value: 'err2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await waitFor(() => expect(screen.getByTestId('error-hint')).toHaveTextContent('Unknown error'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('error-hint')).toHaveTextContent('Unknown error');
 
     const searchDeferred = createDeferred<{ userDatas: unknown[] }>();
     mockSearchCustomers.mockReturnValueOnce(searchDeferred.promise);
@@ -888,17 +901,20 @@ describe('SupportDashboardScreen', () => {
   });
 
   it('shows Loading... on Load more while a paged append is in flight and hides spinner when rows exist', async () => {
-    const first = createDeferred<{ data: SupportIssueListItem[]; total: number }>();
-    const second = createDeferred<{ data: SupportIssueListItem[]; total: number }>();
-    let onHoldCalls = 0;
+    type ListResult = { data: SupportIssueListItem[]; total: number };
+    const onHoldLoads: Deferred<ListResult>[] = [];
+    const pageOne: ListResult = {
+      data: [issue({ id: 1, state: 'OnHold', name: 'Paged 1' })],
+      total: 2,
+    };
 
     mockGetIssueCounts.mockResolvedValue({ OnHold: 2, Canceled: 0, Completed: 0 });
-    mockGetIssueList.mockImplementation(async (params?: { states?: string; type?: string; skip?: number }) => {
+    mockGetIssueList.mockImplementation(async (params?: { states?: string; type?: string }) => {
       if (params?.type === 'LimitRequest') return { data: [], total: 0 };
       if (params?.states === 'OnHold') {
-        onHoldCalls += 1;
-        if (onHoldCalls === 1) return first.promise;
-        return second.promise;
+        const deferred = createDeferred<ListResult>();
+        onHoldLoads.push(deferred);
+        return deferred.promise;
       }
       return { data: [], total: 0 };
     });
@@ -908,25 +924,33 @@ describe('SupportDashboardScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'OnHold (2)' }));
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+    // Debounce also reloads the paged tab (skip 0, replace) — settle both before Load more.
+    await flushDebounce();
+    expect(onHoldLoads.length).toBeGreaterThanOrEqual(2);
 
     await act(async () => {
-      first.resolve({ data: [issue({ id: 1, state: 'OnHold', name: 'Paged 1' })], total: 2 });
+      onHoldLoads[0].resolve(pageOne);
+      onHoldLoads[1].resolve(pageOne);
       await Promise.resolve();
     });
-    await flushDebounce();
 
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(screen.getByText('Paged 1')).toBeInTheDocument();
 
+    const beforeAppend = onHoldLoads.length;
     fireEvent.click(screen.getByRole('button', { name: 'Load more (1 / 2)' }));
     expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled();
+    expect(onHoldLoads.length).toBe(beforeAppend + 1);
 
     await act(async () => {
-      second.resolve({ data: [issue({ id: 2, state: 'OnHold', name: 'Paged 2' })], total: 2 });
+      onHoldLoads[onHoldLoads.length - 1].resolve({
+        data: [issue({ id: 2, state: 'OnHold', name: 'Paged 2' })],
+        total: 2,
+      });
       await Promise.resolve();
     });
 
-    await waitFor(() => expect(screen.getByText('Paged 2')).toBeInTheDocument());
+    expect(screen.getByText('Paged 2')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Load more|Loading/ })).not.toBeInTheDocument();
   });
 
