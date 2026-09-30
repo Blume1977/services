@@ -253,14 +253,22 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   `e2e/compliance-call-queue-list.spec.ts` fulfils
   `GET /v1/support/call-queues/{queue}/items` for ManualCheckPhone,
   ManualCheckIpCountryPhone and UnavailableSuspicious with synthetic items
-  that include `phoneCallTimes` `H9To10;H10To11`, empty lists for
-  `/v1/language`, `/v1/fiat`, `/v1/asset`, `/v1/bankAccount` and
-  `/v1/country`, a null info banner, and `GET /v2/user` with a synthetic
-  account. The session is a synthetic unsigned JWT. A green run proves the
-  Phone Call Times column appears only for ManualCheckPhone and
-  ManualCheckIpCountryPhone and stays hidden for UnavailableSuspicious even
-  when the item carries a value. It does not prove API payloads, login, or
-  token verification.
+  that include `phoneCallTimes` `H9To10;H10To11`, and fulfils the Callback
+  queue with one fixture row and `/v2/user`. Empty lists cover `/v1/language`, `/v1/fiat`, `/v1/asset`,
+  `/v1/bankAccount` and `/v1/country`, plus a null info banner. The session
+  is a synthetic unsigned JWT. A green run proves the Phone Call Times column
+  appears only for ManualCheckPhone and ManualCheckIpCountryPhone and stays
+  hidden for UnavailableSuspicious even when the item carries a value, and
+  that the Callback list shows Country, Status, Marked and Deadline, including
+  a past deadline in red. It does not prove that the API returns those rows,
+  that the mark date is the account's phone-call date, or that login and
+  token verification succeed.
+- **Full-stack compliance specs SQL-seed a call-queue case.**
+  `e2e-stack/specs/fixtures/factories.ts` (`createCallQueueEntry`) inserts a pending `buy_crypto`
+  with AML reason `ManualCheckPhone` and SQL-writes `user_data.phoneCallStatus`,
+  `phoneCallStatusDate` (where the column exists) and `phoneCallCheckDate`. A green run does
+  **not** prove that the AML pipeline parks a transaction in the Callback queue or that a clerk's
+  Unavailable outcome stamps the mark date through the product path.
 - **Full-stack guest assign/refund specs SQL-write `transaction.actionSecretHash`.**
   `e2e-stack/specs/transactions.spec.ts` (`seedActionSecret`) updates the hash directly. A green run
   does **not** prove that the mail/API path creates, hashes, or delivers the action secret.
