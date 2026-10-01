@@ -180,6 +180,16 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   screen calls. A green run proves those fixtures render, including the Screen / Screen-all confirm
   dialogs, the insider confirm dialog, a marked-insider dossier, and a running-batch state. It does not prove that the API returns that payload, that login
   works, that the server filters to RealUnit wallets, or that `PUT …/insider` persists `realUnitInsider`.
+- **The Log Validity visual spec answers the app shell itself.**
+  `e2e/dashboard-financial-log-validity.spec.ts` uses a synthetic unsigned Admin JWT and fulfils
+  `/v1/language`, `/v1/fiat`, `/v1/asset`, `/v1/bankAccount`, `/v1/country`,
+  `/v1/setting/infoBanner` and `/v2/user` with synthetic fixtures, and answers
+  `PUT /v1/log/financial/validity` with a synthetic `{ affected: 1, audited: 3 }`. The screen fetches
+  nothing on mount; other `/v1/**` and `/v2/**` requests are passed through unchanged (`route.continue()`).
+  A green run proves the form, the info-point confirmation and the success message render with the
+  success-state clock frozen.
+  It does not prove production auth, that the API accepts `reference` or `auditAll`, or that it returns
+  `{ affected, audited }`.
 - **Two specs force KYC completeness.** Both collection-invoice cases — the refused QR and the
   stored-detail error — override `**/v2/user` so that `kyc.dataComplete` is read as `true`, because
   the invoice button is gated on that value. A green run therefore proves nothing about the gate for
