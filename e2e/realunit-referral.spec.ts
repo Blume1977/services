@@ -59,10 +59,10 @@ const RELATIONS = [
     kind: 'Promo',
     userId: 8202,
     guestAccountId: 8302,
-    code: 'PROMO24',
+    code: 'WOV2026',
     credited: true,
-    consumedAt: '2026-08-31T09:30:00.000Z',
-    created: '2026-08-31T09:00:00.000Z',
+    consumedAt: '2026-10-01T09:30:00.000Z',
+    created: '2026-10-01T09:00:00.000Z',
   },
   {
     id: 8103,
@@ -142,7 +142,7 @@ test.describe('RealUnit Referral admin', () => {
 
     await expect(page.getByRole('heading', { name: 'Start promo code' })).toHaveCount(0);
     await expect(page.getByText('AB12CD')).toBeVisible();
-    await expect(page.getByText('PROMO24')).toHaveCount(0);
+    await expect(page.getByText('WOV2026')).toHaveCount(0);
     await expect(page.getByRole('checkbox')).not.toBeChecked();
     await expect(page.getByText('ZZ99YY')).toBeVisible();
     await page.waitForTimeout(500);
@@ -257,7 +257,7 @@ test.describe('RealUnit Referral admin', () => {
       ...extra,
     });
     await mockReferralApi(page, [
-      row(31, 'WOV2026', '2026-10-01', '2026-10-18'),
+      row(31, 'WOV2026', '2026-10-01', '2026-10-18', { redemptionCount: 1 }),
       row(32, 'AUTUMN', '2026-10-12', '2026-11-30'),
       row(33, 'FULL', '2026-09-20', '2026-10-30', { redemptionCap: 1, redemptionCount: 1 }),
       row(34, 'SUMMER', '2026-09-10', '2026-09-25'),
@@ -292,7 +292,7 @@ test.describe('RealUnit Referral admin', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    await expect(page.getByText('PROMO24')).toBeVisible();
+    await expect(page.getByText('WOV2026')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Promo redemption' }).first()).toBeVisible();
     await expect(page.getByText('Referrer account')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Promo codes' })).toHaveAttribute('aria-current', 'page');
