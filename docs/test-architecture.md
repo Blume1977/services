@@ -159,14 +159,15 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   that sending a message reaches the server.
 - **The RealUnit referral visual spec answers the relation list and promo list itself.**
   `e2e/realunit-referral.spec.ts` fulfils `GET /v1/realunit/referral/admin/relations` and
-  `GET /v1/realunit/referral/promo` with synthetic fixtures: an empty promo list on the
-  referral list screenshot, and one shareable campaign code on the landing-link, QR-dialog
-  and inline-edit variants, plus one deactivated code on the activate variant, five codes
-  covering every derived status on the overview variant, plus a synthetic unsigned Admin JWT
-  and staff/bootstrap GETs (`/v1/language`, `/v1/fiat`, `/v1/asset`, `/v1/bankAccount`,
-  `/v1/country`, `/v1/setting/infoBanner`, `/v2/user`). The overview variant fixes the page
-  clock to 2026-10-02 08:00 UTC with `page.clock.setFixedTime`, because the status (Active,
-  Planned, Exhausted, Expired, Deactivated) is derived in the browser from the current time.
+  `GET /v1/realunit/referral/promo` with synthetic fixtures: no promo codes for the referral
+  list screenshot (that page does not show them), one shareable campaign code on the
+  landing-link, QR-dialog and inline-edit variants, plus one deactivated code on the activate
+  variant, five codes covering every derived status on the overview variant, plus a
+  synthetic unsigned Admin JWT and staff/bootstrap GETs (`/v1/language`, `/v1/fiat`,
+  `/v1/asset`, `/v1/bankAccount`, `/v1/country`, `/v1/setting/infoBanner`, `/v2/user`). The
+  overview variant fixes the page clock to 2026-10-02 08:00 UTC with `page.clock.setFixedTime`,
+  because the status (Active, Planned, Exhausted, Expired, Deactivated) is derived in the
+  browser from the current time.
   A green run proves the start-promo form, the promo code list with status, filters and sort
   order, a filled promo row with `realunit.app/promo/{code}` and QR overlay, an inline edit
   (Save/Cancel), a deactivated row with Activate after turning off the filter, the redeemed
