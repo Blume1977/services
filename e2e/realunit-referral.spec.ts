@@ -79,6 +79,18 @@ const RELATIONS = [
     manualRewardedAt: '2026-08-21T08:10:00.000Z',
     manualRewardReason: 'Manual payout after approval',
   },
+  {
+    id: 8104,
+    kind: 'Invite',
+    userId: 8204,
+    code: 'NO77XX',
+    credited: false,
+    created: '2026-08-15T08:00:00.000Z',
+    reviewStatus: 'Rejected',
+    reviewedBy: 'Clerk A',
+    reviewedAt: '2026-08-16T08:00:00.000Z',
+    reviewReason: 'Duplicate account',
+  },
 ];
 
 const LIST_RE = /\/v1\/realunit\/referral\/admin\/relations(\?|$)/;
@@ -121,7 +133,8 @@ const PROMO_OVERVIEW = [
 ];
 const DEACTIVATE_RE = /\/v1\/realunit\/referral\/promo\/\d+\/deactivate$/;
 
-async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void> {
+// `german` answers the language list and gives the user German, so `lang=de` renders German labels.
+async function mockReferralApi(page: Page, promo: unknown[] = [], { german = false } = {}): Promise<void> {
   await page.route('**/v1/**', async (route: Route) => {
     const request = route.request();
     const url = request.url();
@@ -129,6 +142,12 @@ async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void>
     if (LIST_RE.test(url)) return json(route, RELATIONS);
     if (PROMO_RE.test(url) && request.method() === 'GET') return json(route, promo);
     if (DEACTIVATE_RE.test(path) && request.method() === 'PUT') return json(route, {});
+    if (german && request.method() === 'GET' && path === '/v1/language') {
+      return json(route, [
+        { id: 3, name: 'German', foreignName: 'Deutsch', symbol: 'DE', enable: true },
+        { id: 1, name: 'English', foreignName: 'English', symbol: 'EN', enable: true },
+      ]);
+    }
     if (
       request.method() === 'GET' &&
       ['/v1/language', '/v1/fiat', '/v1/asset', '/v1/bankAccount', '/v1/country'].includes(path)
@@ -147,7 +166,9 @@ async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void>
         activeAddress: { address: '0x0000000000000000000000000000000000000001', wallet: 'DFX' },
         addresses: [],
         kyc: { level: 50, status: 'Completed' },
-        language: { id: 1, name: 'English', symbol: 'EN' },
+        language: german
+          ? { id: 3, name: 'German', foreignName: 'Deutsch', symbol: 'DE', enable: true }
+          : { id: 1, name: 'English', symbol: 'EN' },
       });
     }
     await route.continue();
@@ -167,6 +188,7 @@ test.describe('RealUnit Referral admin', () => {
     await expect(page.getByText('WOV2026')).toHaveCount(0);
     await expect(page.getByRole('checkbox')).not.toBeChecked();
     await expect(page.getByText('ZZ99YY')).toBeVisible();
+    await expect(page.getByText('Rejected', { exact: true })).toBeVisible();
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-01-list.png', {
@@ -368,6 +390,48 @@ test.describe('RealUnit Referral admin', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-11-list-held-for-review.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+  test('promo codes and referrals render their German labels', async ({ page }) => {
+    await page.clock.setFixedTime(OVERVIEW_NOW);
+    await mockReferralApi(page, PROMO_OVERVIEW, { german: true });
+    const open = async (path: string) => {
+      await page.goto(`${path}?session=${encodeURIComponent(jwt())}&lang=de`);
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+    };
+
+    await open('/realunit/promo');
+    await expect(page.getByText('4 von 5 angezeigt')).toBeVisible();
+    await expect(page.getByText('Ausgeschöpft', { exact: true })).toBeVisible();
+    await expect(page.getByText('Eingelöste Promo-Codes')).toBeVisible();
+    await page.getByText('SUMMER', { exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-12-promo-overview-de.png', { maxDiffPixelRatio: 0.01 });
+
+    await open('/realunit/referral');
+    await expect(page.getByRole('link', { name: 'Empfehlungen' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByText('Abgelehnt', { exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-13-list-de.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await open('/realunit/promo/8102');
+    await expect(page.getByRole('heading', { name: 'Promo-Einlösung' }).first()).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-14-promo-detail-de.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await open(`/realunit/referral/${RELATION_ID}`);
+    await expect(page.getByText('Einladung', { exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-15-referral-detail-de.png', {
       fullPage: true,
       maxDiffPixelRatio: 0.01,
     });
