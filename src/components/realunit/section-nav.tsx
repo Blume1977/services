@@ -66,8 +66,13 @@ export function RealunitSectionNav(): JSX.Element {
         </NavLink>
       )}
       {wide && (
+        <NavLink to="/realunit/promo" className={navClass}>
+          {translate('screens/referral', 'Promo codes')}
+        </NavLink>
+      )}
+      {wide && (
         <NavLink to="/realunit/referral" className={navClass}>
-          {translate('screens/referral', 'RealUnit Referral')}
+          {translate('screens/referral', 'Referrals')}
         </NavLink>
       )}
     </nav>

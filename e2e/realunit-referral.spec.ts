@@ -4,8 +4,10 @@ import { expect, Page, Route, test } from '@playwright/test';
  * E2E Visual Regression Tests: RealUnit staff Referral-admin dashboard
  *
  * Routes:
- *   - /realunit/referral        (relation list — every relation, review filter off by default)
- *   - /realunit/referral/:id    (relation detail — review/reward history + approve/reject/manual-prize)
+ *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes)
+ *   - /realunit/promo/:id       (promo redemption detail — no referrer row, back to the promo codes)
+ *   - /realunit/referral        (referral list — invites only, review filter off by default)
+ *   - /realunit/referral/:id    (referral detail — review/reward history + approve/reject/manual-prize)
  *
  * Auth is a synthetic Admin JWT. Feature data is MOCKED: relations, promo codes, and staff
  * bootstrap GETs. A green run does not prove the live promo or relations API returns these payloads.
@@ -131,17 +133,16 @@ async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void>
 }
 
 test.describe('RealUnit Referral admin', () => {
-  test('relation list renders every relation', async ({ page }) => {
+  test('referral list renders the referral invites only', async ({ page }) => {
     await mockReferralApi(page);
 
     await page.goto(`/realunit/referral?session=${encodeURIComponent(jwt())}&lang=en`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    await expect(page.getByRole('heading', { name: 'Start promo code' })).toBeVisible();
-    await expect(page.getByText('No promo codes yet')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Start promo code' })).toHaveCount(0);
     await expect(page.getByText('AB12CD')).toBeVisible();
-    await expect(page.getByText('PROMO24')).toBeVisible();
+    await expect(page.getByText('PROMO24')).toHaveCount(0);
     await expect(page.getByRole('checkbox')).not.toBeChecked();
     await expect(page.getByText('ZZ99YY')).toBeVisible();
     await page.waitForTimeout(500);
@@ -155,11 +156,12 @@ test.describe('RealUnit Referral admin', () => {
   test('promo list shows a shareable landing link and QR dialog', async ({ page }) => {
     await mockReferralApi(page, PROMO_CODES);
 
-    await page.goto(`/realunit/referral?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
     await expect(page.getByRole('link', { name: 'https://realunit.app/promo/XYZ' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Redeemed promo codes' })).toBeVisible();
     await page.waitForTimeout(500);
     await expect(page).toHaveScreenshot('realunit-referral-03-promo-link.png', {
       fullPage: true,
@@ -179,7 +181,7 @@ test.describe('RealUnit Referral admin', () => {
   test('promo row opens an editor', async ({ page }) => {
     await mockReferralApi(page, PROMO_CODES);
 
-    await page.goto(`/realunit/referral?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
@@ -204,11 +206,14 @@ test.describe('RealUnit Referral admin', () => {
       },
     ]);
 
-    await page.goto(`/realunit/referral?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    await expect(page.getByText('Deactivated')).toBeVisible();
+    // Deactivated codes are hidden by default; the operator shows them with the filter.
+    await expect(page.getByRole('checkbox', { name: 'Hide deactivated' })).toBeChecked();
+    await page.getByRole('checkbox', { name: 'Hide deactivated' }).uncheck();
+    await expect(page.getByText('Deactivated', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Deactivate', exact: true })).toHaveCount(0);
     await page.waitForTimeout(500);
@@ -234,6 +239,65 @@ test.describe('RealUnit Referral admin', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-02-detail.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('promo code list shows status, filters and sorting by valid until', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-02T08:00:00.000Z'));
+    const row = (id: number, code: string, from: string, until: string, extra: object = {}) => ({
+      id,
+      code,
+      minBuyRealu: 200,
+      redemptionCap: 150,
+      redemptionCount: 0,
+      validFrom: `${from}T00:00:00.000Z`,
+      validUntil: `${until}T23:59:59.999Z`,
+      ...extra,
+    });
+    await mockReferralApi(page, [
+      row(31, 'WOV2026', '2026-10-01', '2026-10-18'),
+      row(32, 'AUTUMN', '2026-10-12', '2026-11-30'),
+      row(33, 'FULL', '2026-09-20', '2026-10-30', { redemptionCap: 1, redemptionCount: 1 }),
+      row(34, 'SUMMER', '2026-09-10', '2026-09-25'),
+      row(35, 'OFFTEST', '2026-09-14', '2026-09-15', { deactivatedAt: '2026-09-15T10:00:00.000Z' }),
+    ]);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByText('4 of 5 shown')).toBeVisible();
+    await expect(page.getByText('OFFTEST')).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /Valid until/ })).toHaveAttribute('aria-sort', 'descending');
+    await expect(page.getByText('Planned', { exact: true })).toBeVisible();
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
+    await expect(page.getByText('Exhausted', { exact: true })).toBeVisible();
+    await expect(page.getByText('Expired', { exact: true })).toBeVisible();
+    await expect(page.getByText('18.10.2026')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-07-promo-overview.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('promo redemption detail has its own title and no referrer row', async ({ page }) => {
+    await mockReferralApi(page);
+
+    await page.goto(`/realunit/promo/8102?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByText('PROMO24')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Promo redemption' }).first()).toBeVisible();
+    await expect(page.getByText('Referrer account')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Promo codes' })).toHaveAttribute('aria-current', 'page');
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-08-promo-detail.png', {
       fullPage: true,
       maxDiffPixelRatio: 0.01,
     });
