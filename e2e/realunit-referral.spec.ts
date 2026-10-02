@@ -53,16 +53,16 @@ const RELATIONS = [
     reviewReason: 'High redemption velocity',
   },
   {
+    // Promo redemptions are never held for manual review (the API only holds referral invites),
+    // so this fixture is credited and carries no review fields.
     id: 8102,
     kind: 'Promo',
     userId: 8202,
+    guestAccountId: 8302,
     code: 'PROMO24',
-    credited: false,
+    credited: true,
+    consumedAt: '2026-08-31T09:30:00.000Z',
     created: '2026-08-31T09:00:00.000Z',
-    reviewStatus: 'Pending',
-    reviewedBy: 'System',
-    reviewedAt: '2026-08-31T09:02:00.000Z',
-    reviewReason: 'Manual review threshold reached',
   },
   {
     id: 8103,
@@ -276,10 +276,11 @@ test.describe('RealUnit Referral admin', () => {
     await expect(page.getByText('Exhausted', { exact: true })).toBeVisible();
     await expect(page.getByText('Expired', { exact: true })).toBeVisible();
     await expect(page.getByText('18.10.2026')).toBeVisible();
+    // The workspace scrolls inside its own container, so bring the whole code list into view first.
+    await page.getByText('SUMMER', { exact: true }).scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-07-promo-overview.png', {
-      fullPage: true,
       maxDiffPixelRatio: 0.01,
     });
   });
