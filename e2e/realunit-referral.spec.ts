@@ -100,6 +100,27 @@ const PROMO_CODES = [
   },
 ];
 
+// One code per status for the overview variants, seen at OVERVIEW_NOW.
+const OVERVIEW_NOW = new Date('2026-10-02T08:00:00.000Z');
+const promoRow = (id: number, code: string, from: string, until: string, extra: object = {}) => ({
+  id,
+  code,
+  minBuyRealu: 200,
+  redemptionCap: 150,
+  redemptionCount: 0,
+  validFrom: `${from}T00:00:00.000Z`,
+  validUntil: `${until}T23:59:59.999Z`,
+  ...extra,
+});
+const PROMO_OVERVIEW = [
+  promoRow(31, 'WOV2026', '2026-10-01', '2026-10-18', { redemptionCount: 1 }),
+  promoRow(32, 'AUTUMN', '2026-10-12', '2026-11-30'),
+  promoRow(33, 'FULL', '2026-09-20', '2026-10-30', { redemptionCap: 1, redemptionCount: 1 }),
+  promoRow(34, 'SUMMER', '2026-09-10', '2026-09-25'),
+  promoRow(35, 'OFFTEST', '2026-09-14', '2026-09-15', { deactivatedAt: '2026-09-15T10:00:00.000Z' }),
+];
+const DEACTIVATE_RE = /\/v1\/realunit\/referral\/promo\/\d+\/deactivate$/;
+
 async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void> {
   await page.route('**/v1/**', async (route: Route) => {
     const request = route.request();
@@ -107,6 +128,7 @@ async function mockReferralApi(page: Page, promo: unknown[] = []): Promise<void>
     const path = new URL(url).pathname;
     if (LIST_RE.test(url)) return json(route, RELATIONS);
     if (PROMO_RE.test(url) && request.method() === 'GET') return json(route, promo);
+    if (DEACTIVATE_RE.test(path) && request.method() === 'PUT') return json(route, {});
     if (
       request.method() === 'GET' &&
       ['/v1/language', '/v1/fiat', '/v1/asset', '/v1/bankAccount', '/v1/country'].includes(path)
@@ -245,24 +267,8 @@ test.describe('RealUnit Referral admin', () => {
   });
 
   test('promo code list shows status, filters and sorting by valid until', async ({ page }) => {
-    await page.clock.setFixedTime(new Date('2026-10-02T08:00:00.000Z'));
-    const row = (id: number, code: string, from: string, until: string, extra: object = {}) => ({
-      id,
-      code,
-      minBuyRealu: 200,
-      redemptionCap: 150,
-      redemptionCount: 0,
-      validFrom: `${from}T00:00:00.000Z`,
-      validUntil: `${until}T23:59:59.999Z`,
-      ...extra,
-    });
-    await mockReferralApi(page, [
-      row(31, 'WOV2026', '2026-10-01', '2026-10-18', { redemptionCount: 1 }),
-      row(32, 'AUTUMN', '2026-10-12', '2026-11-30'),
-      row(33, 'FULL', '2026-09-20', '2026-10-30', { redemptionCap: 1, redemptionCount: 1 }),
-      row(34, 'SUMMER', '2026-09-10', '2026-09-25'),
-      row(35, 'OFFTEST', '2026-09-14', '2026-09-15', { deactivatedAt: '2026-09-15T10:00:00.000Z' }),
-    ]);
+    await page.clock.setFixedTime(OVERVIEW_NOW);
+    await mockReferralApi(page, PROMO_OVERVIEW);
 
     await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
     await page.waitForLoadState('networkidle');
@@ -299,6 +305,69 @@ test.describe('RealUnit Referral admin', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-08-promo-detail.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+  test('promo code list hides expired codes and sorts earliest first', async ({ page }) => {
+    await page.clock.setFixedTime(OVERVIEW_NOW);
+    await mockReferralApi(page, PROMO_OVERVIEW);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await page.getByRole('checkbox', { name: 'Hide expired' }).check();
+    await page.getByRole('button', { name: /Valid until/ }).click();
+
+    await expect(page.getByText('3 of 5 shown')).toBeVisible();
+    await expect(page.getByText('SUMMER', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /Valid until/ })).toHaveAttribute('aria-sort', 'ascending');
+    await page.getByText('AUTUMN', { exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-09-promo-expired-hidden-earliest-first.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('a code deactivated in this visit stays visible with activate', async ({ page }) => {
+    await page.clock.setFixedTime(OVERVIEW_NOW);
+    await mockReferralApi(page, PROMO_OVERVIEW);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const row = page.getByRole('row').filter({ has: page.getByText('WOV2026', { exact: true }) });
+    await row.getByRole('button', { name: 'Deactivate', exact: true }).click();
+
+    await expect(row.getByText('Deactivated', { exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Hide deactivated' })).toBeChecked();
+    await expect(page.getByText('4 of 5 shown')).toBeVisible();
+    await page.getByText('SUMMER', { exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-10-promo-deactivated-this-visit.png', {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('referral list shows only invites held for review when filtered', async ({ page }) => {
+    await mockReferralApi(page);
+
+    await page.goto(`/realunit/referral?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await page.getByRole('checkbox', { name: /Held for review only/ }).check();
+
+    await expect(page.getByText('AB12CD')).toBeVisible();
+    await expect(page.getByText('ZZ99YY')).toHaveCount(0);
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-11-list-held-for-review.png', {
       fullPage: true,
       maxDiffPixelRatio: 0.01,
     });
