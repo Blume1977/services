@@ -289,8 +289,11 @@ describe('RealunitPromoPanel', () => {
     render(<RealunitPromoPanel translate={translate} />);
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Hide deactivated' })).toBeChecked());
     expect(screen.queryByText('START2026')).not.toBeInTheDocument();
+    expect(screen.getByText('No promo codes match the filters')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hide deactivated' }));
     await waitFor(() => expect(screen.getByText('Deactivated')).toBeInTheDocument());
+    expect(screen.queryByText('No promo codes match the filters')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Deactivate' })).not.toBeInTheDocument();
   });
 

@@ -1238,7 +1238,6 @@
     "Complete verification": "Compléter la vérification"
   },
   "screens/referral": {
-    "Relations": "Relations",
     "Held for review only": "À examiner uniquement",
     "No entries found": "Aucune entrée trouvée",
     "Kind": "Type",
@@ -1285,6 +1284,7 @@
     "Redeemed": "Utilisations",
     "Deactivated": "Désactivé",
     "No promo codes yet": "Pas encore de codes promo",
+    "No promo codes match the filters": "Aucun code promo ne correspond aux filtres",
     "Landing link": "Lien direct",
     "QR code": "QR code",
     "View QR code": "Afficher le QR code",

@@ -324,7 +324,10 @@ export function RealunitPromoPanel({ translate }: PromoPanelProps): JSX.Element 
           </span>
         </div>
       )}
-      {codes.length > 0 && (
+      {codes.length > 0 && visibleCodes.length === 0 && (
+        <p className="text-sm text-dfxGray-700">{translate('screens/referral', 'No promo codes match the filters')}</p>
+      )}
+      {visibleCodes.length > 0 && (
         <div className="overflow-auto">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-dfxGray-300">
