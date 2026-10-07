@@ -268,6 +268,48 @@ test.describe('RealUnit Referral admin', () => {
     });
   });
 
+  test('promo page without codes shows the empty list', async ({ page }) => {
+    await mockReferralApi(page);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByText('No promo codes yet')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Hide deactivated' })).toHaveCount(0);
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-16-promo-empty.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('promo list says when the filters hide every code', async ({ page }) => {
+    await mockReferralApi(page, [
+      {
+        ...PROMO_CODES[0],
+        code: 'OLD',
+        deactivatedAt: '2026-09-25T11:56:47.917Z',
+        redemptionCount: 0,
+      },
+    ]);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByRole('checkbox', { name: 'Hide deactivated' })).toBeChecked();
+    await expect(page.getByText('No promo codes match the filters')).toBeVisible();
+    await expect(page.getByText('OLD', { exact: true })).toHaveCount(0);
+    await page.waitForTimeout(500);
+
+    await expect(page).toHaveScreenshot('realunit-referral-17-promo-no-match.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
   test('relation detail renders history and review actions', async ({ page }) => {
     await mockReferralApi(page);
 
