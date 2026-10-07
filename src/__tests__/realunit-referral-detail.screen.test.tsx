@@ -248,6 +248,35 @@ describe('RealunitReferralDetailScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/realunit/promo');
   });
 
+  it('moves an old referral link of a promo redemption to the promo route', async () => {
+    mockId = '3';
+    mockPathname = '/realunit/referral/3';
+    mockGetRelations.mockResolvedValue([
+      {
+        id: 3,
+        kind: RealUnitCodeKind.PROMO,
+        userId: 20,
+        code: 'WOV2026',
+        credited: true,
+        created: '2026-10-01T10:00:00Z',
+      },
+    ]);
+    render(<RealunitReferralDetailScreen />);
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/realunit/promo/3', { replace: true }));
+  });
+
+  it('moves an invite opened under the promo route to the referral route', async () => {
+    mockId = String(PENDING.id);
+    mockPathname = `/realunit/promo/${PENDING.id}`;
+    mockGetRelations.mockResolvedValue([PENDING]);
+    render(<RealunitReferralDetailScreen />);
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(`/realunit/referral/${PENDING.id}`, { replace: true }),
+    );
+  });
+
   it('translates a rejected review status', async () => {
     mockGetRelations.mockResolvedValue([{ ...PENDING, reviewStatus: RealUnitManualReviewStatus.REJECTED }]);
     render(<RealunitReferralDetailScreen />);

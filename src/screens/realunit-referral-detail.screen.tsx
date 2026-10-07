@@ -53,6 +53,16 @@ export default function RealunitReferralDetailScreen(): JSX.Element {
       .finally(() => setIsLoading(false));
   }, [id, getRelations]);
 
+  // Links from before the split open every redemption under /realunit/referral/:id. Once the record
+  // is known, move to the route of its kind so title, Back and the section nav match it.
+  useEffect(() => {
+    if (!relation) return;
+    const relationIsPromo = relation.kind === RealUnitCodeKind.PROMO;
+    if (relationIsPromo !== isPromo) {
+      navigate(`/realunit/${relationIsPromo ? 'promo' : 'referral'}/${relation.id}`, { replace: true });
+    }
+  }, [relation, isPromo]);
+
   if (isLoading && !relation) return <StyledLoadingSpinner size={SpinnerSize.LG} />;
   if (error && !relation) return <ErrorHint message={error} />;
   if (notFound && !relation)
