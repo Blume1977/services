@@ -1264,6 +1264,7 @@
   "screens/referral": {
     "Held for review only": "Nur zu prüfende",
     "No entries found": "Keine Einträge gefunden",
+    "Search name, guest account or remittance info": "Name, Gast-Konto oder Verwendungszweck",
     "Kind": "Typ",
     "Code": "Code",
     "Review Status": "Prüfstatus",

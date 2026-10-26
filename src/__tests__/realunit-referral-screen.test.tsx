@@ -7,6 +7,9 @@ jest.mock('@dfx.swiss/react', () => ({}));
 jest.mock('@dfx.swiss/react-components', () => ({
   SpinnerSize: { SM: 'sm', LG: 'lg' },
   StyledLoadingSpinner: () => <div data-testid="spinner" />,
+  StyledSearchInput: ({ placeholder, onChange }: { placeholder: string; onChange: (value: string) => void }) => (
+    <input aria-label={placeholder} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+  ),
 }));
 jest.mock('src/components/error-hint', () => ({
   ErrorHint: ({ message }: { message: string }) => <div data-testid="error-hint">{message}</div>,

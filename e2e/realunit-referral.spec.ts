@@ -4,7 +4,7 @@ import { expect, Page, Route, test } from '@playwright/test';
  * E2E Visual Regression Tests: RealUnit staff Referral-admin dashboard
  *
  * Routes:
- *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes)
+ *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes with search)
  *   - /realunit/promo/:id       (promo redemption detail — no referrer row, back to the promo codes)
  *   - /realunit/referral        (referral list — invites only, review filter off by default)
  *   - /realunit/referral/:id    (referral detail — review/reward history + approve/reject/manual-prize)
@@ -67,6 +67,17 @@ const RELATIONS = [
     qualifyingBuyReference: 'REALU-100002',
     consumedAt: '2026-10-01T09:30:00.000Z',
     created: '2026-10-01T09:00:00.000Z',
+  },
+  {
+    // Second promo redemption of the same code, not credited yet and without a guest name, so the
+    // redemption search has something to narrow down.
+    id: 8105,
+    kind: 'Promo',
+    userId: 8205,
+    guestAccountId: 8305,
+    code: 'WOV2026',
+    credited: false,
+    created: '2026-10-02T14:00:00.000Z',
   },
   {
     id: 8103,
@@ -309,6 +320,50 @@ test.describe('RealUnit Referral admin', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('realunit-referral-17-promo-no-match.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+
+  test('redeemed promo codes can be searched by name, guest account or remittance info', async ({ page }) => {
+    await mockReferralApi(page, PROMO_CODES);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const redemptions = page
+      .getByRole('heading', { name: 'Redeemed promo codes' })
+      .locator('xpath=following::table[1]');
+    await expect(redemptions.getByRole('row')).toHaveCount(3);
+
+    const search = page.getByPlaceholder('Search name, guest account or remittance info');
+    await search.fill('guest b');
+    await expect(redemptions.getByRole('row')).toHaveCount(2);
+    await expect(page.getByText('1 of 2 shown')).toBeVisible();
+    await expect(redemptions.getByText('Test Guest B')).toBeVisible();
+    await expect(redemptions.getByText('8305')).toHaveCount(0);
+    // The workspace scrolls inside its own container, so bring the redemption table into view first.
+    await redemptions.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-18-promo-redemptions-search.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await search.fill('8305');
+    await expect(redemptions.getByText('8305')).toBeVisible();
+    await expect(redemptions.getByText('Test Guest B')).toHaveCount(0);
+
+    await search.fill('REALU-100002');
+    await expect(redemptions.getByText('Test Guest B')).toBeVisible();
+
+    await search.fill('nobody');
+    await expect(page.getByText('0 of 2 shown')).toBeVisible();
+    await expect(page.getByText('No entries found')).toBeVisible();
+    await page.getByText('No entries found').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-19-promo-redemptions-no-match.png', {
       fullPage: true,
       maxDiffPixelRatio: 0.01,
     });

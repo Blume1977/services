@@ -1263,6 +1263,7 @@
   "screens/referral": {
     "Held for review only": "Solo da esaminare",
     "No entries found": "Nessuna voce trovata",
+    "Search name, guest account or remittance info": "Cerca nome, conto ospite o causale",
     "Kind": "Tipo",
     "Code": "Codice",
     "Review Status": "Stato revisione",
