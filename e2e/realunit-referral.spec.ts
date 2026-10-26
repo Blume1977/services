@@ -341,8 +341,8 @@ test.describe('RealUnit Referral admin', () => {
     await search.fill('guest b');
     await expect(redemptions.getByRole('row')).toHaveCount(2);
     await expect(page.getByText('1 of 2 shown')).toBeVisible();
-    await expect(redemptions.getByText('Test Guest B')).toBeVisible();
-    await expect(redemptions.getByText('8305')).toHaveCount(0);
+    await expect(redemptions.getByText('Test Guest B', { exact: true })).toBeVisible();
+    await expect(redemptions.getByText('8305', { exact: true })).toHaveCount(0);
     // The workspace scrolls inside its own container, so bring the redemption table into view first.
     await redemptions.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
@@ -352,11 +352,11 @@ test.describe('RealUnit Referral admin', () => {
     });
 
     await search.fill('8305');
-    await expect(redemptions.getByText('8305')).toBeVisible();
-    await expect(redemptions.getByText('Test Guest B')).toHaveCount(0);
+    await expect(redemptions.getByText('8305', { exact: true })).toBeVisible();
+    await expect(redemptions.getByText('Test Guest B', { exact: true })).toHaveCount(0);
 
     await search.fill('REALU-100002');
-    await expect(redemptions.getByText('Test Guest B')).toBeVisible();
+    await expect(redemptions.getByText('Test Guest B', { exact: true })).toBeVisible();
 
     await search.fill('nobody');
     await expect(page.getByText('0 of 2 shown')).toBeVisible();
