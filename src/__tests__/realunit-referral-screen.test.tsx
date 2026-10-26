@@ -103,7 +103,7 @@ describe('RealunitReferralScreen', () => {
     expect(screen.getByText(/Redemptions/)).toHaveTextContent('Redemptions: 3');
     expect(screen.getByText(/Held for review only/)).toHaveTextContent('Held for review only (1)');
     expect(screen.getByLabelText(/Held for review only/)).not.toBeChecked();
-    expect(screen.getByLabelText(/Not credited only/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Credited only/)).not.toBeChecked();
     expect(screen.getByRole('columnheader', { name: 'Review Status' })).toBeInTheDocument();
     expect(within(screen.getByText('AB12CD').closest('tr') as HTMLElement).getByText('Open')).toBeInTheDocument();
     expect(within(screen.getByText('OK1234').closest('tr') as HTMLElement).getByText('Approved')).toBeInTheDocument();

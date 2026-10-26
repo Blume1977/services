@@ -1,5 +1,5 @@
 // Component tests for the shared RealUnit redemption table: loading, error and empty states, the kind
-// filter, the held-for-review filter and column, the not-credited filter, row navigation per kind, and
+// filter, the held-for-review filter and column, the credited filter, row navigation per kind, and
 // the search over guest name, guest account and remittance info with its "x of y shown" counter.
 
 jest.mock('@dfx.swiss/react', () => ({}));
@@ -154,7 +154,7 @@ describe('RealunitReferralRelations', () => {
 
     expect(screen.getByText('Redemptions: 2')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Held for review only/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Not credited only (1)')).not.toBeChecked();
+    expect(screen.getByLabelText('Credited only (1)')).not.toBeChecked();
     expect(screen.queryByRole('columnheader', { name: 'Review Status' })).not.toBeInTheDocument();
     expect(screen.queryByText('AB12CD')).not.toBeInTheDocument();
     expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
@@ -212,44 +212,46 @@ describe('RealunitReferralRelations', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/realunit/referral/1');
   });
 
-  it('narrows the list to redemptions that are not credited yet and counts them', async () => {
+  it('narrows the list to credited redemptions and counts them', async () => {
     mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
     renderPromo();
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
 
-    const uncreditedOnly = screen.getByLabelText('Not credited only (2)');
-    expect(uncreditedOnly).not.toBeChecked();
+    const creditedOnly = screen.getByLabelText('Credited only (1)');
+    expect(creditedOnly).not.toBeChecked();
     expect(rows()).toHaveLength(3);
 
-    fireEvent.click(uncreditedOnly);
-    expect(uncreditedOnly).toBeChecked();
-    expect(rows()).toHaveLength(2);
-    expect(screen.getByText('2 of 3 shown')).toBeInTheDocument();
-    expect(screen.queryByText('WEWO')).not.toBeInTheDocument();
-    expect(screen.getByText('TICHY')).toBeInTheDocument();
-    expect(screen.getByText('WOV')).toBeInTheDocument();
+    fireEvent.click(creditedOnly);
+    expect(creditedOnly).toBeChecked();
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('1 of 3 shown')).toBeInTheDocument();
+    expect(screen.getByText('WEWO')).toBeInTheDocument();
+    expect(screen.queryByText('TICHY')).not.toBeInTheDocument();
+    expect(screen.queryByText('WOV')).not.toBeInTheDocument();
 
-    fireEvent.click(uncreditedOnly);
+    fireEvent.click(creditedOnly);
     expect(rows()).toHaveLength(3);
     expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
   });
 
-  it('combines the not-credited filter with the review filter and the search', async () => {
+  it('combines the credited filter with the review filter and the search', async () => {
     mockGetRelations.mockResolvedValue([INVITE_PENDING, INVITE_UNREVIEWED]);
     renderInvites();
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('Not credited only (1)'));
+    fireEvent.click(screen.getByLabelText('Credited only (1)'));
     expect(rows()).toHaveLength(1);
-    expect(screen.getByText('AB12CD')).toBeInTheDocument();
+    expect(screen.getByText('ZZ99YY')).toBeInTheDocument();
     expect(screen.getByText('1 of 2 shown')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Held for review only (1)'));
-    expect(rows()).toHaveLength(1);
-    expect(screen.getByText('AB12CD')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('No entries found')).toBeInTheDocument();
+    expect(screen.getByText('0 of 2 shown')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByLabelText('Held for review only (1)'));
     fireEvent.change(screen.getByPlaceholderText('Search name, guest account or remittance info'), {
-      target: { value: 'zz99' },
+      target: { value: 'ab12' },
     });
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText('0 of 2 shown')).toBeInTheDocument();

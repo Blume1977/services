@@ -74,7 +74,7 @@ describe('RealunitPromoScreen', () => {
     expect(screen.getByText(/Redemptions/)).toHaveTextContent('Redemptions: 1');
     expect(screen.queryByText('AB12CD')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Held for review only/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Not credited only/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Credited only/)).not.toBeChecked();
     expect(screen.queryByRole('columnheader', { name: 'Review Status' })).not.toBeInTheDocument();
   });
 

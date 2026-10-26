@@ -4,7 +4,7 @@ import { expect, Page, Route, test } from '@playwright/test';
  * E2E Visual Regression Tests: RealUnit staff Referral-admin dashboard
  *
  * Routes:
- *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes with search and not-credited filter)
+ *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes with search and credited filter)
  *   - /realunit/promo/:id       (promo redemption detail — no referrer row, back to the promo codes)
  *   - /realunit/referral        (referral list — invites only, review filter off by default)
  *   - /realunit/referral/:id    (referral detail — review/reward history + approve/reject/manual-prize)
@@ -202,7 +202,7 @@ test.describe('RealUnit Referral admin', () => {
     await expect(page.getByText('AB12CD')).toBeVisible();
     await expect(page.getByText('WOV2026')).toHaveCount(0);
     await expect(page.getByRole('checkbox', { name: /Held for review only/ })).not.toBeChecked();
-    await expect(page.getByRole('checkbox', { name: /Not credited only/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Credited only/ })).not.toBeChecked();
     await expect(page.getByText('ZZ99YY')).toBeVisible();
     await expect(page.getByText('Rejected', { exact: true })).toBeVisible();
     await page.waitForTimeout(500);
@@ -370,7 +370,7 @@ test.describe('RealUnit Referral admin', () => {
     });
   });
 
-  test('redeemed promo codes can be narrowed to those not credited yet', async ({ page }) => {
+  test('redeemed promo codes can be narrowed to those already credited', async ({ page }) => {
     await mockReferralApi(page, PROMO_CODES);
 
     await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
@@ -382,27 +382,27 @@ test.describe('RealUnit Referral admin', () => {
       .locator('xpath=following::table[1]');
     await expect(redemptions.getByRole('row')).toHaveCount(3);
 
-    const uncreditedOnly = page.getByRole('checkbox', { name: /Not credited only/ });
-    await expect(uncreditedOnly).not.toBeChecked();
-    await uncreditedOnly.check();
+    const creditedOnly = page.getByRole('checkbox', { name: /Credited only/ });
+    await expect(creditedOnly).not.toBeChecked();
+    await creditedOnly.check();
     await expect(redemptions.getByRole('row')).toHaveCount(2);
     await expect(page.getByText('1 of 2 shown')).toBeVisible();
-    await expect(redemptions.getByText('8305', { exact: true })).toBeVisible();
-    await expect(redemptions.getByText('Test Guest B', { exact: true })).toHaveCount(0);
+    await expect(redemptions.getByText('Test Guest B', { exact: true })).toBeVisible();
+    await expect(redemptions.getByText('8305', { exact: true })).toHaveCount(0);
     await redemptions.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('realunit-referral-20-promo-redemptions-not-credited.png', {
+    await expect(page).toHaveScreenshot('realunit-referral-20-promo-redemptions-credited.png', {
       fullPage: true,
       maxDiffPixelRatio: 0.01,
     });
 
-    // The filter stacks with the search: a credited guest no longer matches.
-    await page.getByPlaceholder('Search name, guest account or remittance info').fill('guest b');
+    // The filter stacks with the search: the not-credited guest account no longer matches.
+    await page.getByPlaceholder('Search name, guest account or remittance info').fill('8305');
     await expect(page.getByText('0 of 2 shown')).toBeVisible();
     await expect(page.getByText('No entries found')).toBeVisible();
 
-    await uncreditedOnly.uncheck();
-    await expect(redemptions.getByText('Test Guest B', { exact: true })).toBeVisible();
+    await creditedOnly.uncheck();
+    await expect(redemptions.getByText('8305', { exact: true })).toBeVisible();
   });
 
   test('relation detail renders history and review actions', async ({ page }) => {
