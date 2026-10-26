@@ -1,6 +1,6 @@
 // Component tests for the shared RealUnit redemption table: loading, error and empty states, the kind
-// filter, the held-for-review filter and column, row navigation per kind, and the search over guest
-// name, guest account and remittance info with its "x of y shown" counter.
+// filter, the held-for-review filter and column, the not-credited filter, row navigation per kind, and
+// the search over guest name, guest account and remittance info with its "x of y shown" counter.
 
 jest.mock('@dfx.swiss/react', () => ({}));
 jest.mock('@dfx.swiss/react-components', () => ({
@@ -153,7 +153,8 @@ describe('RealunitReferralRelations', () => {
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
 
     expect(screen.getByText('Redemptions: 2')).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Held for review only/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Not credited only (1)')).not.toBeChecked();
     expect(screen.queryByRole('columnheader', { name: 'Review Status' })).not.toBeInTheDocument();
     expect(screen.queryByText('AB12CD')).not.toBeInTheDocument();
     expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
@@ -202,13 +203,56 @@ describe('RealunitReferralRelations', () => {
     expect(within(pending).getAllByRole('cell')[4]).toHaveTextContent('Open');
     expect(within(unreviewed).getAllByRole('cell')[4]).toHaveTextContent('-');
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByLabelText('Held for review only (1)'));
     expect(rows()).toHaveLength(1);
     expect(screen.getByText('1 of 2 shown')).toBeInTheDocument();
     expect(screen.queryByText('ZZ99YY')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('AB12CD'));
     expect(mockNavigate).toHaveBeenCalledWith('/realunit/referral/1');
+  });
+
+  it('narrows the list to redemptions that are not credited yet and counts them', async () => {
+    mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
+    renderPromo();
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+
+    const uncreditedOnly = screen.getByLabelText('Not credited only (2)');
+    expect(uncreditedOnly).not.toBeChecked();
+    expect(rows()).toHaveLength(3);
+
+    fireEvent.click(uncreditedOnly);
+    expect(uncreditedOnly).toBeChecked();
+    expect(rows()).toHaveLength(2);
+    expect(screen.getByText('2 of 3 shown')).toBeInTheDocument();
+    expect(screen.queryByText('WEWO')).not.toBeInTheDocument();
+    expect(screen.getByText('TICHY')).toBeInTheDocument();
+    expect(screen.getByText('WOV')).toBeInTheDocument();
+
+    fireEvent.click(uncreditedOnly);
+    expect(rows()).toHaveLength(3);
+    expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
+  });
+
+  it('combines the not-credited filter with the review filter and the search', async () => {
+    mockGetRelations.mockResolvedValue([INVITE_PENDING, INVITE_UNREVIEWED]);
+    renderInvites();
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Not credited only (1)'));
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('AB12CD')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 shown')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Held for review only (1)'));
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('AB12CD')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search name, guest account or remittance info'), {
+      target: { value: 'zz99' },
+    });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('0 of 2 shown')).toBeInTheDocument();
   });
 
   it('filters by guest name, guest account or remittance info and counts the shown rows', async () => {
@@ -246,7 +290,7 @@ describe('RealunitReferralRelations', () => {
     renderInvites();
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByLabelText('Held for review only (1)'));
     fireEvent.change(screen.getByPlaceholderText('Search name, guest account or remittance info'), {
       target: { value: 'pending' },
     });

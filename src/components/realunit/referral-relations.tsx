@@ -36,6 +36,8 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
   const [error, setError] = useState<string>();
   // presentation-only default filter; the loaded list always stays complete
   const [reviewOnly, setReviewOnly] = useState(false);
+  // presentation-only filter: redemptions whose reward has not been credited yet
+  const [uncreditedOnly, setUncreditedOnly] = useState(false);
   // presentation-only search over the loaded list; the API is not queried again
   const [search, setSearch] = useState('');
 
@@ -58,12 +60,15 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
     [ofKind],
   );
 
+  const uncreditedCount = useMemo(() => (ofKind ?? []).filter((r) => !r.credited).length, [ofKind]);
+
   const displayed = useMemo(
     () =>
       ofKind
         ?.filter((r) => !reviewOnly || r.reviewStatus === RealUnitManualReviewStatus.PENDING)
+        .filter((r) => !uncreditedOnly || !r.credited)
         .filter((r) => matchesRelationSearch(r, search)),
-    [ofKind, reviewOnly, search],
+    [ofKind, reviewOnly, uncreditedOnly, search],
   );
 
   const isFiltered = Boolean(ofKind && displayed && displayed.length !== ofKind.length);
@@ -80,6 +85,10 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
             {translate('screens/referral', 'Held for review only')} ({pendingCount})
           </label>
         )}
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={uncreditedOnly} onChange={(e) => setUncreditedOnly(e.target.checked)} />
+          {translate('screens/referral', 'Not credited only')} ({uncreditedCount})
+        </label>
         <div className="w-full sm:w-[30rem]">
           <StyledSearchInput
             placeholder={translate('screens/referral', 'Search name, guest account or remittance info')}

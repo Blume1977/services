@@ -1263,6 +1263,7 @@
   "screens/referral": {
     "Held for review only": "À examiner uniquement",
     "No entries found": "Aucune entrée trouvée",
+    "Not credited only": "Non crédités uniquement",
     "Search name, guest account or remittance info": "Nom, compte invité ou motif de paiement",
     "Kind": "Type",
     "Code": "Code",

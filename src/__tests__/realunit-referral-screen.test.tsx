@@ -102,7 +102,8 @@ describe('RealunitReferralScreen', () => {
     expect(screen.queryByText('PROMO9')).not.toBeInTheDocument();
     expect(screen.getByText(/Redemptions/)).toHaveTextContent('Redemptions: 3');
     expect(screen.getByText(/Held for review only/)).toHaveTextContent('Held for review only (1)');
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByLabelText(/Held for review only/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Not credited only/)).not.toBeChecked();
     expect(screen.getByRole('columnheader', { name: 'Review Status' })).toBeInTheDocument();
     expect(within(screen.getByText('AB12CD').closest('tr') as HTMLElement).getByText('Open')).toBeInTheDocument();
     expect(within(screen.getByText('OK1234').closest('tr') as HTMLElement).getByText('Approved')).toBeInTheDocument();
@@ -115,7 +116,7 @@ describe('RealunitReferralScreen', () => {
     render(<RealunitReferralScreen />);
     await waitFor(() => expect(screen.getByText('AB12CD')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByLabelText(/Held for review only/));
 
     expect(screen.queryByText('OK1234')).not.toBeInTheDocument();
     expect(screen.getByText('AB12CD')).toBeInTheDocument();
@@ -166,7 +167,7 @@ describe('RealunitReferralScreen', () => {
     render(<RealunitReferralScreen />);
     await waitFor(() => expect(screen.getByText('OK1234')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByLabelText(/Held for review only/));
 
     expect(screen.getByText('No entries found')).toBeInTheDocument();
   });

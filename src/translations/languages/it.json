@@ -1263,6 +1263,7 @@
   "screens/referral": {
     "Held for review only": "Solo da esaminare",
     "No entries found": "Nessuna voce trovata",
+    "Not credited only": "Solo non accreditati",
     "Search name, guest account or remittance info": "Nome, conto ospite o causale",
     "Kind": "Tipo",
     "Code": "Codice",
