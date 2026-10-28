@@ -287,7 +287,7 @@ describe('SupportDashboardScreen', () => {
     expect(queryFilterSelect('Department')).toBeNull();
   });
 
-  it('shows the App column with the ticket source for every role', async () => {
+  it('shows the App column with the ticket source also for the Support role, which has no Dept column', async () => {
     mockAuth.role = 'Support';
     mockGetIssueList.mockResolvedValue({
       data: [issue({ id: 1, name: 'From RealUnit', source: 'RealUnit' })],

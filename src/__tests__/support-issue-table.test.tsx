@@ -311,11 +311,11 @@ describe('GroupedIssueTable', () => {
 
     expect(screen.getByRole('columnheader', { name: 'App' })).toBeInTheDocument();
     expect(within(rowOf('Needs reply')).getByText('RealUnit')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting reply (1)').closest('td')).toHaveAttribute('colspan', '9');
+    expect(screen.getByText('Awaiting reply (1)').closest('td')).toHaveAttribute('colspan', '8');
 
     rerender(<GroupedIssueTable groups={groups} showDepartment={false} onRowClick={jest.fn()} />);
     expect(screen.queryByRole('columnheader', { name: 'App' })).not.toBeInTheDocument();
-    expect(screen.getByText('Awaiting reply (1)').closest('td')).toHaveAttribute('colspan', '7');
+    expect(screen.getByText('Awaiting reply (1)').closest('td')).toHaveAttribute('colspan', '6');
   });
 
   it('renders the Awaiting header without toggle semantics', () => {

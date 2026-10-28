@@ -74,7 +74,8 @@ export interface IssueGroups {
   answered: SupportIssueListItem[];
 }
 
-const COLUMN_COUNT = 7;
+// Type, Name, Clerk, State, Msgs and Last Msg; App and Dept are added when shown.
+const COLUMN_COUNT = 6;
 
 // Height of the sticky table header (text-xs line + py-1.5); section headers stick right below it.
 const SECTION_HEADER_TOP = 'top-7';
@@ -153,9 +154,7 @@ function IssueRow({
         )}
       </td>
       {showSource && (
-        <td className="px-2 py-1.5 text-xs text-dfxBlue-800 text-left group-hover:text-white">
-          {issue.source || '-'}
-        </td>
+        <td className="px-2 py-1.5 text-xs text-dfxBlue-800 text-left group-hover:text-white">{issue.source || '-'}</td>
       )}
       {showDepartment && (
         <td className="px-2 py-1.5 text-xs text-dfxBlue-800 text-left group-hover:text-white">
