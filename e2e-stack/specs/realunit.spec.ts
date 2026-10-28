@@ -204,9 +204,18 @@ test.describe('RealUnit area', () => {
     await expect(page.getByRole('heading', { name: 'Start promo code' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Redeemed promo codes' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Promo codes' })).toHaveAttribute('aria-current', 'page');
+    // redemption table filters: credited-only starts off, a search without a match shows the empty hint
+    await expect(page.getByRole('checkbox', { name: /Credited only/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Show incomplete/ })).not.toBeChecked();
+    const promoSearch = page.getByPlaceholder('Search name, guest account or remittance info');
+    await promoSearch.fill('no-such-redemption-e2e');
+    await expect(page.getByText('No entries found')).toBeVisible();
 
     await page.getByRole('link', { name: 'Referrals' }).click();
     await expect(page.getByRole('checkbox', { name: /Held for review only/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Credited only/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Show incomplete/ })).not.toBeChecked();
+    await expect(page.getByPlaceholder('Search name, guest account or remittance info')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Referrals' })).toHaveAttribute('aria-current', 'page');
 
     await page.getByRole('link', { name: 'Insights' }).click();

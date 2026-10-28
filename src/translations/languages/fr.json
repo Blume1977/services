@@ -1265,6 +1265,9 @@
   "screens/referral": {
     "Held for review only": "À examiner uniquement",
     "No entries found": "Aucune entrée trouvée",
+    "Credited only": "Crédités uniquement",
+    "Show incomplete": "Afficher les incomplets",
+    "Search name, guest account or remittance info": "Nom, compte invité ou motif de paiement",
     "Kind": "Type",
     "Code": "Code",
     "Review Status": "Statut d'examen",

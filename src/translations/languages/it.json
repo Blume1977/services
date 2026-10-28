@@ -1265,6 +1265,9 @@
   "screens/referral": {
     "Held for review only": "Solo da esaminare",
     "No entries found": "Nessuna voce trovata",
+    "Credited only": "Solo accreditati",
+    "Show incomplete": "Mostra incompleti",
+    "Search name, guest account or remittance info": "Nome, conto ospite o causale",
     "Kind": "Tipo",
     "Code": "Codice",
     "Review Status": "Stato revisione",
