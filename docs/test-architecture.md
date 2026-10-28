@@ -168,8 +168,8 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   code on the activate and no-match variants, five codes covering every derived status on the overview, expired-hidden and
   deactivated-this-visit variants, two promo redemptions of one code (one credited with a
   guest name and a remittance reference, one not credited without a guest name) for the
-  redemption search and credited filter, and one invite per review status (Open, Approved,
-  Rejected) on the referral list. It also answers the deactivate call
+  redemption search, the credited filter and the incomplete rows hidden by default, and one
+  invite with a guest name per review status (Open, Approved, Rejected) on the referral list. It also answers the deactivate call
   (`PUT /v1/realunit/referral/promo/:id/deactivate`) with an empty success, plus a synthetic
   unsigned Admin JWT and staff/bootstrap GETs (`/v1/language`, `/v1/fiat`, `/v1/asset`,
   `/v1/bankAccount`, `/v1/country`, `/v1/setting/infoBanner`, `/v2/user`). The five-code
@@ -181,7 +181,8 @@ run does not prove for each one; the taxonomy and cross-repository entries live 
   every code, the promo code list with status, both filters and both sort orders, a filled promo row with `realunit.app/promo/{code}` and QR overlay, an
   inline edit (Save/Cancel), a deactivated row with Activate after turning off the filter, a
   row deactivated in the visit that stays visible, the redeemed promo codes with the search
-  over guest name, guest account and remittance info, the credited filter and the
+  over guest name, guest account and remittance info, the credited filter, the redemptions
+  without a guest name hidden until "Show incomplete" is ticked, and the
   "x of y shown" counter, the invite-only
   referral table with and without the review filter, and the referral and promo redemption
   detail fixtures render, in English and with the German labels. It does not prove that the

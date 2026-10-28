@@ -1,6 +1,7 @@
 // Component tests for the shared RealUnit redemption table: loading, error and empty states, the kind
-// filter, the held-for-review filter and column, the credited filter, row navigation per kind, and
-// the search over guest name, guest account and remittance info with its "x of y shown" counter.
+// filter, the held-for-review filter and column, the credited filter, the incomplete rows hidden by
+// default, row navigation per kind, and the search over guest name, guest account and remittance info
+// with its "x of y shown" counter.
 
 jest.mock('@dfx.swiss/react', () => ({}));
 jest.mock('@dfx.swiss/react-components', () => ({
@@ -25,7 +26,11 @@ jest.mock('src/hooks/realunit-referral.hook', () => ({
 jest.mock('src/util/utils', () => ({ formatSwissDateTimeWithSeconds: (v: string) => `at ${v}` }));
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { RealunitReferralRelations, matchesRelationSearch } from 'src/components/realunit/referral-relations';
+import {
+  RealunitReferralRelations,
+  isIncompleteRelation,
+  matchesRelationSearch,
+} from 'src/components/realunit/referral-relations';
 import { RealUnitCodeKind, RealUnitManualReviewStatus, RealUnitReferralRelation } from 'src/dto/realunit-referral.dto';
 
 const translate = (_ns: string, key: string) => key;
@@ -73,6 +78,8 @@ const INVITE_UNREVIEWED: RealUnitReferralRelation = {
   id: 2,
   kind: RealUnitCodeKind.INVITE,
   userId: 11,
+  guestAccountId: 434002,
+  guestName: 'Credited Guest',
   code: 'ZZ99YY',
   credited: true,
   created: '2026-09-02T10:00:00Z',
@@ -91,6 +98,10 @@ function renderPromo(): void {
 
 function renderInvites(): void {
   render(<RealunitReferralRelations kind={RealUnitCodeKind.INVITE} title="Invites" withReview translate={translate} />);
+}
+
+function showIncomplete(count: number): void {
+  fireEvent.click(screen.getByLabelText(`Show incomplete (${count})`));
 }
 
 function rows(): HTMLElement[] {
@@ -114,6 +125,14 @@ describe('matchesRelationSearch', () => {
     expect(matchesRelationSearch(PROMO_NAMED, 'WEWO')).toBe(false);
     expect(matchesRelationSearch(PROMO_NAMED, '5')).toBe(false);
     expect(matchesRelationSearch(PROMO_BARE, 'a')).toBe(false);
+  });
+});
+
+describe('isIncompleteRelation', () => {
+  it('treats a redemption without a guest name as incomplete', () => {
+    expect(isIncompleteRelation(PROMO_BARE)).toBe(true);
+    expect(isIncompleteRelation({ ...PROMO_NAMED, guestName: '   ' })).toBe(true);
+    expect(isIncompleteRelation(PROMO_NAMED)).toBe(false);
   });
 });
 
@@ -155,8 +174,11 @@ describe('RealunitReferralRelations', () => {
     expect(screen.getByText('Redemptions: 2')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Held for review only/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Credited only (1)')).not.toBeChecked();
+    expect(screen.getByLabelText('Show incomplete (1)')).not.toBeChecked();
     expect(screen.queryByRole('columnheader', { name: 'Review Status' })).not.toBeInTheDocument();
     expect(screen.queryByText('AB12CD')).not.toBeInTheDocument();
+
+    showIncomplete(1);
     expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
 
     const [named, bare] = rows();
@@ -216,6 +238,7 @@ describe('RealunitReferralRelations', () => {
     mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
     renderPromo();
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+    showIncomplete(2);
 
     const creditedOnly = screen.getByLabelText('Credited only (1)');
     expect(creditedOnly).not.toBeChecked();
@@ -261,6 +284,7 @@ describe('RealunitReferralRelations', () => {
     mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
     renderPromo();
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+    showIncomplete(2);
 
     const search = screen.getByPlaceholderText('Search name, guest account or remittance info');
 
@@ -304,5 +328,53 @@ describe('RealunitReferralRelations', () => {
     });
     expect(screen.getByText('No entries found')).toBeInTheDocument();
     expect(screen.getByText('0 of 2 shown')).toBeInTheDocument();
+  });
+  it('hides the redemptions without a guest name by default and shows them on request', async () => {
+    mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
+    renderPromo();
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+
+    const toggle = screen.getByLabelText('Show incomplete (2)');
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText('Redemptions: 3')).toBeInTheDocument();
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('WEWO')).toBeInTheDocument();
+    expect(screen.queryByText('TICHY')).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 3 shown')).toBeInTheDocument();
+
+    // a search for a hidden row finds it only once the incomplete rows are shown
+    fireEvent.change(screen.getByPlaceholderText('Search name, guest account or remittance info'), {
+      target: { value: '434352' },
+    });
+    expect(screen.getByText('No entries found')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('TICHY')).toBeInTheDocument();
+    expect(screen.getByText('1 of 3 shown')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search name, guest account or remittance info'), {
+      target: { value: '' },
+    });
+    expect(rows()).toHaveLength(3);
+    expect(screen.queryByText(/shown/)).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(rows()).toHaveLength(1);
+  });
+
+  it('keeps the credited filter working with the incomplete rows hidden', async () => {
+    mockGetRelations.mockResolvedValue([PROMO_NAMED, PROMO_ANONYMOUS, PROMO_BARE]);
+    renderPromo();
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Credited only (1)'));
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('WEWO')).toBeInTheDocument();
+
+    showIncomplete(2);
+    expect(rows()).toHaveLength(1);
+    expect(screen.getByText('1 of 3 shown')).toBeInTheDocument();
   });
 });

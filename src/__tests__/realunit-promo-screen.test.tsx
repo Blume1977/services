@@ -43,6 +43,7 @@ const PROMO = {
   id: 5,
   kind: RealUnitCodeKind.PROMO,
   userId: 14,
+  guestName: 'Promo Guest',
   code: 'WOV2026',
   credited: true,
   created: '2026-10-01T10:00:00Z',
@@ -51,6 +52,7 @@ const INVITE = {
   id: 1,
   kind: RealUnitCodeKind.INVITE,
   userId: 10,
+  guestName: 'Invite Guest',
   code: 'AB12CD',
   credited: false,
   created: '2026-09-01T10:00:00Z',
@@ -75,6 +77,7 @@ describe('RealunitPromoScreen', () => {
     expect(screen.queryByText('AB12CD')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Held for review only/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Credited only/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Show incomplete/)).not.toBeChecked();
     expect(screen.queryByRole('columnheader', { name: 'Review Status' })).not.toBeInTheDocument();
   });
 

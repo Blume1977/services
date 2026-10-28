@@ -25,6 +25,12 @@ export function matchesRelationSearch(relation: RealUnitReferralRelation, query:
   return haystack.some((value) => value != null && value.toLowerCase().includes(needle));
 }
 
+// A redemption whose guest has no name has not finished the process (the account was never identified).
+// The table hides these rows by default and shows them on request.
+export function isIncompleteRelation(relation: RealUnitReferralRelation): boolean {
+  return !relation.guestName?.trim();
+}
+
 // Redemptions of one code kind (promo codes or referral invites). Both screens load the same
 // relation list; the kind only decides which rows are shown here.
 export function RealunitReferralRelations({ kind, title, withReview, translate }: ReferralRelationsProps): JSX.Element {
@@ -38,6 +44,8 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
   const [reviewOnly, setReviewOnly] = useState(false);
   // presentation-only filter: redemptions whose reward has already been credited
   const [creditedOnly, setCreditedOnly] = useState(false);
+  // presentation-only filter, off by default: redemptions whose guest never finished the process
+  const [showIncomplete, setShowIncomplete] = useState(false);
   // presentation-only search over the loaded list; the API is not queried again
   const [search, setSearch] = useState('');
 
@@ -62,13 +70,16 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
 
   const creditedCount = useMemo(() => (ofKind ?? []).filter((r) => r.credited).length, [ofKind]);
 
+  const incompleteCount = useMemo(() => (ofKind ?? []).filter(isIncompleteRelation).length, [ofKind]);
+
   const displayed = useMemo(
     () =>
       ofKind
-        ?.filter((r) => !reviewOnly || r.reviewStatus === RealUnitManualReviewStatus.PENDING)
+        ?.filter((r) => showIncomplete || !isIncompleteRelation(r))
+        .filter((r) => !reviewOnly || r.reviewStatus === RealUnitManualReviewStatus.PENDING)
         .filter((r) => !creditedOnly || r.credited)
         .filter((r) => matchesRelationSearch(r, search)),
-    [ofKind, reviewOnly, creditedOnly, search],
+    [ofKind, showIncomplete, reviewOnly, creditedOnly, search],
   );
 
   const isFiltered = Boolean(ofKind && displayed && displayed.length !== ofKind.length);
@@ -88,6 +99,10 @@ export function RealunitReferralRelations({ kind, title, withReview, translate }
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={creditedOnly} onChange={(e) => setCreditedOnly(e.target.checked)} />
           {translate('screens/referral', 'Credited only')} ({creditedCount})
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={showIncomplete} onChange={(e) => setShowIncomplete(e.target.checked)} />
+          {translate('screens/referral', 'Show incomplete')} ({incompleteCount})
         </label>
         <div className="w-full sm:w-[30rem]">
           <StyledSearchInput

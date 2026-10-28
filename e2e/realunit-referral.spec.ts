@@ -4,7 +4,7 @@ import { expect, Page, Route, test } from '@playwright/test';
  * E2E Visual Regression Tests: RealUnit staff Referral-admin dashboard
  *
  * Routes:
- *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes with search and credited filter)
+ *   - /realunit/promo           (promo codes — start form, code list with status/filters/sort, redeemed promo codes with search, credited filter and hidden incomplete rows)
  *   - /realunit/promo/:id       (promo redemption detail — no referrer row, back to the promo codes)
  *   - /realunit/referral        (referral list — invites only, review filter off by default)
  *   - /realunit/referral/:id    (referral detail — review/reward history + approve/reject/manual-prize)
@@ -69,8 +69,8 @@ const RELATIONS = [
     created: '2026-10-01T09:00:00.000Z',
   },
   {
-    // Second promo redemption of the same code, not credited yet and without a guest name, so the
-    // redemption search has something to narrow down.
+    // Second promo redemption of the same code, not credited yet and without a guest name: the guest
+    // never finished the process, so the table hides it until "Show incomplete" is ticked.
     id: 8105,
     kind: 'Promo',
     userId: 8205,
@@ -83,6 +83,8 @@ const RELATIONS = [
     id: 8103,
     kind: 'Invite',
     userId: 8203,
+    guestAccountId: 8303,
+    guestName: 'Test Guest C',
     code: 'ZZ99YY',
     credited: true,
     created: '2026-08-20T08:00:00.000Z',
@@ -98,6 +100,8 @@ const RELATIONS = [
     id: 8104,
     kind: 'Invite',
     userId: 8204,
+    guestAccountId: 8304,
+    guestName: 'Test Guest D',
     code: 'NO77XX',
     credited: false,
     created: '2026-08-15T08:00:00.000Z',
@@ -203,6 +207,7 @@ test.describe('RealUnit Referral admin', () => {
     await expect(page.getByText('WOV2026')).toHaveCount(0);
     await expect(page.getByRole('checkbox', { name: /Held for review only/ })).not.toBeChecked();
     await expect(page.getByRole('checkbox', { name: /Credited only/ })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Show incomplete/ })).not.toBeChecked();
     await expect(page.getByText('ZZ99YY')).toBeVisible();
     await expect(page.getByText('Rejected', { exact: true })).toBeVisible();
     await page.waitForTimeout(500);
@@ -336,6 +341,7 @@ test.describe('RealUnit Referral admin', () => {
     const redemptions = page
       .getByRole('heading', { name: 'Redeemed promo codes' })
       .locator('xpath=following::table[1]');
+    await page.getByRole('checkbox', { name: /Show incomplete/ }).check();
     await expect(redemptions.getByRole('row')).toHaveCount(3);
 
     const search = page.getByPlaceholder('Search name, guest account or remittance info');
@@ -380,6 +386,7 @@ test.describe('RealUnit Referral admin', () => {
     const redemptions = page
       .getByRole('heading', { name: 'Redeemed promo codes' })
       .locator('xpath=following::table[1]');
+    await page.getByRole('checkbox', { name: /Show incomplete/ }).check();
     await expect(redemptions.getByRole('row')).toHaveCount(3);
 
     const creditedOnly = page.getByRole('checkbox', { name: /Credited only/ });
@@ -403,6 +410,43 @@ test.describe('RealUnit Referral admin', () => {
 
     await creditedOnly.uncheck();
     await expect(redemptions.getByText('8305', { exact: true })).toBeVisible();
+  });
+
+  test('redeemed promo codes hide the incomplete ones until shown', async ({ page }) => {
+    await mockReferralApi(page, PROMO_CODES);
+
+    await page.goto(`/realunit/promo?session=${encodeURIComponent(jwt())}&lang=en`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const redemptions = page
+      .getByRole('heading', { name: 'Redeemed promo codes' })
+      .locator('xpath=following::table[1]');
+    const showIncomplete = page.getByRole('checkbox', { name: 'Show incomplete (1)' });
+
+    // By default only the redemption whose guest finished the process is listed.
+    await expect(showIncomplete).not.toBeChecked();
+    await expect(redemptions.getByRole('row')).toHaveCount(2);
+    await expect(redemptions.getByText('Test Guest B', { exact: true })).toBeVisible();
+    await expect(redemptions.getByText('8305', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('1 of 2 shown')).toBeVisible();
+    await redemptions.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-21-promo-redemptions-incomplete-hidden.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await showIncomplete.check();
+    await expect(redemptions.getByRole('row')).toHaveCount(3);
+    await expect(redemptions.getByText('8305', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 of 2 shown')).toHaveCount(0);
+    await redemptions.getByText('8305', { exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('realunit-referral-22-promo-redemptions-incomplete-shown.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.01,
+    });
   });
 
   test('relation detail renders history and review actions', async ({ page }) => {
