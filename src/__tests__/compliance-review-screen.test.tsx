@@ -715,6 +715,20 @@ describe('save handlers', () => {
     expect(mockCreateKycLog).toHaveBeenCalledWith(42, expect.stringContaining('amlAccountType'));
   });
 
+  it('does not write an AML account type when the operational step sits on a non-organization account', async () => {
+    mockTabParam = 'operationalActivity';
+    await renderLoaded(
+      mockData({
+        accountType: undefined,
+        kycSteps: [mockStep('OperationalActivity', 'Pending', 1, '{"isOperational":true}')],
+      }),
+    );
+    await invoke(() => mockReviewProps?.onSave(7, 'Failed', 'Clerk', 'Operational') ?? Promise.resolve());
+    expect(mockUpdateKycStep).toHaveBeenCalled();
+    expect(mockUpdateUserData).not.toHaveBeenCalled();
+    expect(mockCreateKycLog).toHaveBeenCalledWith(42, expect.not.stringContaining('amlAccountType'));
+  });
+
   it.each([
     ['an Error', new Error('review failed'), 'review failed'],
     ['a non-Error', 'review failed', 'Error saving'],

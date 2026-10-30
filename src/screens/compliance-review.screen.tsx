@@ -232,7 +232,8 @@ export default function ComplianceReviewScreen(): JSX.Element {
 
       const results: KycLogResult[] = [{ table: 'kycStep', column: 'status', value: status }];
 
-      if (effectiveTab === 'operationalActivity' && userDataId) {
+      // The tab can also show on a non-organization account that has the step; never write a company AML type there
+      if (effectiveTab === 'operationalActivity' && userDataId && account.userData.accountType === 'Organization') {
         const step = findLatestStep(account.kycSteps, 'OperationalActivity');
         const amlAccountType = deriveAmlAccountType(step);
         if (amlAccountType) {

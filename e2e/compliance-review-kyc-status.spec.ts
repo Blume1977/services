@@ -90,9 +90,15 @@ async function fulfillJson(route: Route, body: unknown): Promise<void> {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+// Fixtures may drop the account type or carry KYC steps, which the base fixture does not
+type ComplianceFixture = Omit<typeof complianceFixture, 'userData' | 'kycSteps'> & {
+  userData: Omit<typeof complianceFixture.userData, 'accountType'> & { accountType?: string };
+  kycSteps: unknown[];
+};
+
 async function installSyntheticApi(
   page: Page,
-  fixtureSource: typeof complianceFixture = complianceFixture,
+  fixtureSource: ComplianceFixture = complianceFixture,
 ): Promise<{ unexpectedRequests: string[]; mutations: { method: string; path: string; body: unknown }[] }> {
   const unexpectedRequests: string[] = [];
   const mutations: { method: string; path: string; body: unknown }[] = [];
@@ -446,23 +452,21 @@ test.describe('Compliance review KYC and AML actions', () => {
     await page.setViewportSize({ width: 1280, height: 1200 });
 
     // A level-0 account without an account type whose Statutes step waits in ManualReview.
-    const statutesFixture = structuredClone(complianceFixture) as typeof complianceFixture & {
-      userData: { accountType?: string };
-      kycSteps: unknown[];
+    const { accountType: _accountType, ...userDataWithoutAccountType } = complianceFixture.userData;
+    const statutesFixture = {
+      ...structuredClone(complianceFixture),
+      userData: { ...userDataWithoutAccountType, kycLevel: 0, kycStatus: 'NA' },
+      transactions: [],
+      kycSteps: [
+        {
+          id: 861016,
+          name: 'Statutes',
+          status: 'ManualReview',
+          sequenceNumber: 0,
+          created: '2026-10-29T04:53:40.000Z',
+        },
+      ],
     };
-    delete statutesFixture.userData.accountType;
-    statutesFixture.userData.kycLevel = 0;
-    statutesFixture.userData.kycStatus = 'NA';
-    statutesFixture.transactions = [];
-    statutesFixture.kycSteps = [
-      {
-        id: 861016,
-        name: 'Statutes',
-        status: 'ManualReview',
-        sequenceNumber: 0,
-        created: '2026-10-29T04:53:40.000Z',
-      },
-    ];
 
     const { unexpectedRequests } = await installSyntheticApi(page, statutesFixture);
 
