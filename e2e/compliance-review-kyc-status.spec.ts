@@ -441,4 +441,48 @@ test.describe('Compliance review KYC and AML actions', () => {
 
     expect(unexpectedRequests).toEqual([]);
   });
+
+  test('shows the Statutes decision for a step opened on an account without an account type', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+
+    // A level-0 account without an account type whose Statutes step waits in ManualReview.
+    const statutesFixture = structuredClone(complianceFixture) as typeof complianceFixture & {
+      userData: { accountType?: string };
+      kycSteps: unknown[];
+    };
+    delete statutesFixture.userData.accountType;
+    statutesFixture.userData.kycLevel = 0;
+    statutesFixture.userData.kycStatus = 'NA';
+    statutesFixture.transactions = [];
+    statutesFixture.kycSteps = [
+      {
+        id: 861016,
+        name: 'Statutes',
+        status: 'ManualReview',
+        sequenceNumber: 0,
+        created: '2026-10-29T04:53:40.000Z',
+      },
+    ];
+
+    const { unexpectedRequests } = await installSyntheticApi(page, statutesFixture);
+
+    await page.goto(`/compliance/user/${USER_DATA_ID}/kyc?session=${jwt()}&tab=statutes`);
+
+    await expect(page.getByRole('button', { name: /^Statuten/ })).toBeVisible();
+    await expect(page.getByText('Die Statuten werden:')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Operational Activity/ })).toHaveCount(0);
+
+    await page
+      .locator('select')
+      .filter({ has: page.locator('option[value="Abgelehnt"]') })
+      .selectOption('Abgelehnt');
+    await expect(page.getByText('Kommentar:')).toBeVisible();
+
+    await expect(page).toHaveScreenshot('compliance-review-statutes-without-account-type.png', {
+      fullPage: true,
+      maxDiffPixels: 5000,
+    });
+
+    expect(unexpectedRequests).toEqual([]);
+  });
 });

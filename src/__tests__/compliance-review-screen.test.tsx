@@ -1107,6 +1107,14 @@ describe('tab badges, colors and panels', () => {
     expect(organization.container.querySelector('[class*="w-0.5"]')).not.toBeNull();
   });
 
+  it('shows an organization tab on an account without that account type when the account has its step', async () => {
+    mockTabParam = 'statutes';
+    await renderLoaded(mockData({ accountType: undefined, kycSteps: [mockStep('Statutes', 'ManualReview')] }));
+    expect(tab('Statuten')).toHaveClass('bg-white', 'border-dfxBlue-800');
+    expect(mockReviewProps?.step?.name).toBe('Statutes');
+    expect(screen.queryByRole('button', { name: 'Operational Activity' })).not.toBeInTheDocument();
+  });
+
   it('falls back from an invisible requested tab and changes the active style when clicked', async () => {
     mockTabParam = 'operationalActivity';
     await renderLoaded();

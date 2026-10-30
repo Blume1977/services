@@ -531,8 +531,12 @@ export default function ComplianceReviewScreen(): JSX.Element {
     return gray;
   }
 
+  // An account-type tab also shows when the account has its step, so a step opened on another
+  // account type (e.g. Statutes on a personal account) can still be reviewed and rejected
   const accountType = String(data.userData.accountType ?? '');
-  const visibleTabs = reviewTabs.filter((t) => !t.accountTypes || t.accountTypes.includes(accountType));
+  const visibleTabs = reviewTabs.filter(
+    (t) => !t.accountTypes || t.accountTypes.includes(accountType) || data.kycSteps.some((s) => s.name === t.stepName),
+  );
 
   const effectiveTab = activeTab && visibleTabs.some((t) => t.key === activeTab) ? activeTab : visibleTabs[0].key;
   if (effectiveTab && effectiveTab !== activeTab) setActiveTab(effectiveTab);
